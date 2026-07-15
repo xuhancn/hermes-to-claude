@@ -126,3 +126,24 @@ Claude 可调 Hermes cron、发送 Telegram 通知、触发盘前扫描。
 ## License
 
 MIT
+
+## 跨机器远程桥接
+
+```
+┌─── Mac mini (你的新家) ──────┐
+│                                │
+│  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
+│       ▲                          │
+│       │                          │ SSH tunnel
+│   Telegram 网关                  │
+└───────┼──────────────────────────┼───┘
+        │                          │
+   手机指令                  ┌──────▼──────────┐
+                            │ StockMan 工控机   │
+                            │ (Windows Server) │
+                            └─────────────────┘
+```
+
+On the Mac: `node bridge.mjs --http :9090`
+On the remote: `ssh -L 9090:localhost:9090 mac-mini` → Hermes calls `localhost:9090`
+
