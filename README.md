@@ -6,6 +6,10 @@
 
 ## 设计
 
+### 本地模式 (stdio)
+
+Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdin/stdout 传输 JSON-RPC 消息：
+
 ```
 Hermes Agent                    Claude Code CLI
     │                                │
@@ -18,7 +22,34 @@ Hermes Agent                    Claude Code CLI
   - task.stop                     - Git操作
 ```
 
-Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdio 传输 JSON-RPC 消息。
+### 远程模式 (HTTP + SSH Tunnel)
+
+Bridge 以 HTTP 服务形式运行在某台机器上，另一台机器上的 Hermes 通过 SSH 隧道调用：
+
+```
+┌─── Mac mini ───────────────────────┐
+│                                     │
+│  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
+│       ▲                            │
+│       │                            │ SSH tunnel
+│   Telegram 网关                     │
+└───────┼────────────────────────────┼───┘
+        │                            │
+   手机指令                   ┌──────▼──────────┐
+                             │ StockMan 工控机   │
+                             │ (Windows Server) │
+                             └─────────────────┘
+```
+
+On the Mac:
+```bash
+node dist/bridge.mjs --http :9090
+```
+On the remote machine:
+```bash
+ssh -L 9090:localhost:9090 mac-mini
+```
+Hermes 侧配置指向 `localhost:9090` 即可。
 
 ## 依赖
 
@@ -127,24 +158,3 @@ Claude 可调 Hermes cron、发送 Telegram 通知、触发盘前扫描。
 ## License
 
 MIT
-
-## 跨机器远程桥接
-
-```
-┌─── Mac mini (你的新家) ──────┐
-│                                │
-│  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
-│       ▲                          │
-│       │                          │ SSH tunnel
-│   Telegram 网关                  │
-└───────┼──────────────────────────┼───┘
-        │                          │
-   手机指令                  ┌──────▼──────────┐
-                            │ StockMan 工控机   │
-                            │ (Windows Server) │
-                            └─────────────────┘
-```
-
-On the Mac: `node dist/bridge.mjs --http :9090`
-On the remote: `ssh -L 9090:localhost:9090 mac-mini` → Hermes calls `localhost:9090`
-
