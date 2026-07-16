@@ -1,5 +1,6 @@
 import { createServer as http } from "http";
 import { Bridge } from "./bridge.mjs";
+import { incrementTasks } from "./state.mjs";
 
 let taskCount = 0, startTime = Date.now();
 let bridge = new Bridge();
@@ -40,6 +41,7 @@ export function createServer(users) {
         
         if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;
+          incrementTasks();
           result = await (async () => bridge.createTask(payload.prompt))();
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");

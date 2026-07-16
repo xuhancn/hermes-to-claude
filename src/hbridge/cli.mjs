@@ -2,6 +2,7 @@
 import { startMcpServer } from "./mcp.mjs";
 import { createServer, startStatusBar } from "./server.mjs";
 import { UserManager } from "./users.mjs";
+import { markRunning, markStopped } from "./state.mjs";
 import { COLORS, log } from "./utils.mjs";
 import { networkInterfaces } from "os";
 
@@ -53,7 +54,8 @@ async function cmd_enable(username) {
 
   server = createServer(users);
   server.listen(PORT);
-  
+  markRunning(PORT, Object.keys(users.list()));
+
   startStatusBar(PORT);
   process.stdin.resume();
 }
@@ -63,6 +65,7 @@ function cmd_disable() {
     server.close();
     server = null;
   }
+  markStopped();
   if (statusInterval) {
     clearInterval(statusInterval);
     statusInterval = null;
