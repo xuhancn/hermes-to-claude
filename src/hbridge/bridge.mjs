@@ -9,7 +9,7 @@ export class Bridge {
     mkdirSync(TASKS_DIR, { recursive: true });
   }
 
-  async createTask(prompt, opts = {}) {
+  createTask(prompt, opts = {}) {
     const id = `task_${Date.now()}`;
     const task = {
       id,
@@ -20,6 +20,7 @@ export class Bridge {
       created: Date.now(),
     };
     this.tasks.set(id, task);
+    return { task_id: id, status: "created" };
 
     // Spawn Claude Code
     const child = spawn("npx", ["@anthropic-ai/claude-code", "-p", prompt], {
