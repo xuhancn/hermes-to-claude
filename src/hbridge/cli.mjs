@@ -1,19 +1,32 @@
-import { createServer } from "./server.mjs";
+#!/usr/bin/env node
+import { createServer, startStatusBar } from "./server.mjs";
 import { UserManager } from "./users.mjs";
 import { COLORS, log } from "./utils.mjs";
+import { networkInterfaces } from "os";
 
 const PORT = 9190;
+let server = null;
+let statusInterval = null;
 
-async function cmd_enable() {
+function getLocalIPs() {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter(n => n.family === "IPv4" && !n.internal)
+    .map(n => n.address);
+}
+
+async function cmd_enable(username) {
   const users = new UserManager();
   
-  // 交互问用户名
-  process.stdout.write("  Username: ");
-  const username = await new Promise(r => {
-    process.stdin.once("data", d => r(d.toString().trim()));
-  });
-  
+  if (!username) {
+    process.stdout.write("  Username: ");
+    username = await new Promise(r => {
+      process.stdin.once("data", d => r(d.toString().trim()));
+    });
+  }
+
   const key = users.add(username);
+  const ips = getLocalIPs();
   
   console.log(`
   ╔══════════════════════════════════╗
@@ -22,33 +35,92 @@ async function cmd_enable() {
   ║                                  ║
   ║  User:   ${username.padEnd(22)}║
   ║  Key:    ${key.padEnd(22)}║
-  ║  Addr:   127.0.0.1:${PORT}          ║
-  ║          ${getLocalIPs().join(", ").padEnd(22)}║
-  ║                                  ║
+  ║  Addr:   127.0.0.1:${PORT}          ║`);
+  for (const ip of ips) {
+    console.log(`  ║          ${ip.padEnd(22)}║`);
+  }
+  console.log(`  ║                                  ║
   ║  Save this key — shown once      ║
   ╚══════════════════════════════════╝
-  `);
-  
-  const server = createServer(users);
+`);
+
+  server = createServer(users);
   server.listen(PORT);
   
-  // 一行状态栏
-  log(`  hbridge: on | port: ${PORT} | 0 tasks | ↑ just now`);
+  startStatusBar(PORT);
+  process.stdin.resume();
+}
+
+function cmd_disable() {
+  if (server) {
+    server.close();
+    server = null;
+  }
+  if (statusInterval) {
+    clearInterval(statusInterval);
+    statusInterval = null;
+  }
+  console.log("  hbridge: off");
+  process.exit(0);
+}
+
+function cmd_status() {
+  const users = new UserManager();
+  console.log(`
+  ══════════════════════════
+  Status:    ${server ? "enabled" : "disabled"}
+  Port:      ${PORT}
+  Users:     ${Object.keys(users.list()).length}
+  ══════════════════════════
+`);
+  const list = users.list();
+  for (const [name, info] of Object.entries(list)) {
+    console.log(`  ${name}  created: ${new Date(info.created).toISOString().slice(0,10)}`);
+  }
+}
+
+function cmd_user(action, name) {
+  const users = new UserManager();
   
-  process.stdin.resume(); // keep alive
+  if (action === "add") {
+    process.stdout.write("  Add user: ");
+    name = name || require("fs").readFileSync(0, "utf8").trim();
+    const key = users.add(name);
+    console.log(`  User: ${name}  Key: ${key}`);
+  } else if (action === "del") {
+    users.del(name);
+    console.log(`  Deleted: ${name}`);
+  } else if (action === "key") {
+    const key = users.regenerate(name);
+    console.log(`  New key for ${name}: ${key}`);
+  } else if (action === "list") {
+    const list = users.list();
+    if (Object.keys(list).length === 0) {
+      console.log("  No users");
+    } else {
+      for (const [n, info] of Object.entries(list)) {
+        console.log(`  ${n}  (${new Date(info.created).toISOString().slice(0,10)})`);
+      }
+    }
+  }
 }
 
-function getLocalIPs() {
-  const os = require("os");
-  return Object.values(os.networkInterfaces())
-    .flat()
-    .filter(n => n.family === "IPv4" && !n.internal)
-    .map(n => n.address);
-}
+const args = process.argv.slice(2);
+const cmd = args[0];
+const sub = args[1];
+const val = args[2];
 
-const cmd = process.argv[2] || "--enable";
-if (cmd === "--enable") cmd_enable();
-else if (cmd === "--disable") console.log("disabled (not yet)");
-else if (cmd === "--status") console.log("status (not yet)");
-'EOF
-echo "cli.mjs written"
+if (cmd === "--enable") cmd_enable(val);
+else if (cmd === "--disable") cmd_disable();
+else if (cmd === "--status") cmd_status();
+else if (cmd === "--user") cmd_user(sub, val);
+else {
+  console.log("hbridge — Hermes Bridge");
+  console.log("  hbridge --enable [-u user]   Start bridge");
+  console.log("  hbridge --disable            Stop bridge");
+  console.log("  hbridge --status             Show status");
+  console.log("  hbridge --user add [name]    Add user");
+  console.log("  hbridge --user del <name>    Delete user");
+  console.log("  hbridge --user key <name>    Regenerate key");
+  console.log("  hbridge --user list          List users");
+}
