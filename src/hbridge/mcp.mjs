@@ -20,7 +20,7 @@ export function startMcpServer() {
 
 function handleMcp(msg, users, bridge) {
   const { method, params, id } = msg;
-  if (method === "initialize") respond({ jsonrpc: "2.0", id, result: { protocolVersion: "1.0", capabilities: { tools: {} }, serverInfo: { name: "hbridge", version: "1.0.0" } } });
+  if (method === "initialize") respond({ jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "hbridge", version: "1.0.0" } } });
   else if (method === "tools/list") respond({ jsonrpc: "2.0", id, result: { tools: [{ name: "hbridge_enable", description: "Start hbridge" }, { name: "hbridge_status", description: "Show status" }] } });
   else if (method === "tools/call") {
     const { name, arguments: args = {} } = params;
