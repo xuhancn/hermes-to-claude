@@ -110,7 +110,7 @@ const cmd = args[0];
 const sub = args[1];
 const val = args[2];
 
-if (cmd === "--enable") cmd_enable(val);
+if (cmd === "--enable") cmd_enable(sub);
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--user") cmd_user(sub, val);
