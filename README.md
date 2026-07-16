@@ -30,7 +30,7 @@ hbridge auto-registers as a Claude Code MCP server on install. All interaction i
 hbridge --enable [-u user]    Start bridge + generate key
 hbridge --disable             Stop bridge
 hbridge --status              Show detailed status
-hbridge --help                Show this help
+node dist/hbridge.mjs --help # or: hbridge --help                Show this help
 
 hbridge --user add [name]     Add user
 hbridge --user del <name>     Delete user
@@ -100,15 +100,17 @@ git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install
 npm run build
+node dist/hbridge.mjs --help
 sudo npm install -g .
 npm run build
-sudo npm install -g .             # → hbridge command available
+node dist/hbridge.mjs --help
+sudo npm install -g .             # → hbridge command (may need sudo)
 ```
 
 ### 3. Verify
 
 ```bash
-hbridge --help
+node dist/hbridge.mjs --help # or: hbridge --help
 ```
 
 That is it. Open Claude Code and use `/mcp hbridge enable`.
