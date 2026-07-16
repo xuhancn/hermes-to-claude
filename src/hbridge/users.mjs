@@ -12,7 +12,7 @@ export class UserManager {
   add(username) {
     const key = Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
     const formatted = "hb_" + key.slice(0, 4) + "-" + key.slice(4);
-    this.users[username] = { key: key, created: Date.now() };
+    this.users[username] = { key: formatted, created: Date.now() };
     this._save();
     return formatted;
   }
@@ -25,7 +25,7 @@ export class UserManager {
   regenerate(username) {
     const key = Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
     const formatted = "hb_" + key.slice(0, 4) + "-" + key.slice(4);
-    this.users[username] = { key: key, created: Date.now() };
+    this.users[username] = { key: formatted, created: Date.now() };
     this._save();
     return formatted;
   }
@@ -38,8 +38,8 @@ export class UserManager {
     const u = this.users[username];
     if (!u) return false;
     // support both with/without dash
-    const flat = key.replace("-", "");
-    return u.key === flat || u.key === key;
+    const flat = key.replace("-", "").replace("hb_", "");
+    return u.key === key.replace("-", "");
   }
   
   _save() {
