@@ -42,18 +42,18 @@ function livenessCheck(port) {
 async function main() {
   const state = readState();
   if (!state.running) {
-    console.log("hbridge: off");
+    console.log("⏹️ hbridge: off");
     return;
   }
 
   const alive = await livenessCheck(state.port);
   if (!alive) {
     writeState({ running: false, tasks: 0 });
-    console.log("hbridge: off");
+    console.log("⏹️ hbridge: off");
     return;
   }
 
-  const parts = [`hbridge: on`, `:${state.port}`];
+  const parts = [`▶️ hbridge: on`, `:${state.port}`];
   if (state.latestTask) {
     const icon = state.latestTask.status === "running" ? "📨" : state.latestTask.exitCode === 0 ? "✅" : "❌";
     const msg = state.latestTask.prompt.replace(/\n/g, " ").slice(0, 30);
