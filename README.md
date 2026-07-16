@@ -121,6 +121,8 @@ node src/hbridge/cli.mjs --help
 
 ## Usage
 
+> See [HERMES.md](HERMES.md) for the Hermes Agent integration guide.
+
 ### 1. Start hbridge
 
 ```bash
