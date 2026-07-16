@@ -64,12 +64,13 @@ export class Bridge {
       task.exitCode = code;
       task.result = output;
       writeFileSync(`${TASKS_DIR}/${id}.txt`, output);
-      updateInbox(id, { status: "done", exitCode: code, finished: Date.now() });
+      updateInbox(id, { status: "done", exitCode: code, result: output, finished: Date.now() });
     });
 
     child.on("error", (err) => {
       task.status = "failed";
       task.result = err.message;
+      updateInbox(id, { status: "failed", result: err.message, finished: Date.now() });
     });
 
     return { task_id: id };
