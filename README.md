@@ -73,51 +73,26 @@ Point Hermes config to localhost:9190.
 - **Claude Code CLI**(npx @anthropic-ai/claude-code, cc-switch compatible)
 - **Hermes Agent** any version
 
-## Build (All Platforms)
-
-TypeScript project, builds to a single executable:
+## Developer Flow
 
 ```bash
+# 1. Clone
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
+
+# 2. Build
 npm install
-npm run build          # → dist/bridge.mjs
+npm run build
+
+# 3. Install globally
+npm install -g .
+
+# 4. Verify
+hbridge --help
 ```
 
-## Install
+That is it. Open Claude Code and use `/mcp hbridge enable`.
 
-### Linux
-
-```bash
-# 1. Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# 2. Clone + build
-git clone <repo> && cd hermes-claude-bridge
-npm install && npm run build
-
-# 3. Verify
-node src/hbridge/cli.mjs --help
-```
-
-### macOS
-
-```bash
-brew install node@22
-git clone <repo> && cd hermes-claude-bridge
-npm install && npm run build
-node src/hbridge/cli.mjs --help
-```
-
-### Windows
-
-```powershell
-winget install OpenJS.NodeJS.LTS
-git clone <repo> ; cd hermes-claude-bridge
-npm install ; npm run build
-node src/hbridge/cli.mjs --help
-```
 
 ## Usage
 
