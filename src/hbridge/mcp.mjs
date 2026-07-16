@@ -58,11 +58,11 @@ function handleMcp(msg, users, bridge) {
       markStopped();
       t = "disabled";
     } else if (name === "hbridge_status") {
-      t = JSON.stringify({
-        running: true,
-        port: 9190,
-        users: Object.keys(users.list()),
-      });
+      const inbox = readInbox();
+      const recent = inbox.slice(-5).reverse().map(t =>
+        `${t.status === "done" ? "✅" : "⏳"} Hermes: "${t.prompt.slice(0, 60)}"${t.status === "done" ? ` → exit:${t.exitCode}` : ""}`
+      ).join("\n");
+      t = `hbridge running on :${9190} | Users: ${Object.keys(users.list()).join(", ")}${recent ? `\n\nRecent tasks:\n${recent}` : "\n\nNo recent tasks"}`;
     } else if (name === "hbridge_user_add") {
       const ex = users.list();
       t = ex[args.name] ? ex[args.name].key : users.add(args.name);
