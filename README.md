@@ -100,6 +100,8 @@ git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install
 npm run build
+sudo npm install -g .
+npm run build
 sudo npm install -g .             # → hbridge command available
 ```
 
