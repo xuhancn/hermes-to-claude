@@ -35,26 +35,30 @@ export class Bridge {
     pushToInbox({ id, prompt, status: "running", created: Date.now() });
     chatLog("▶ Hermes → Claude:", prompt.slice(0, 120));
 
+    // Claude CLI expects prompt via stdin with --print flag:
+    //   echo "prompt" | npx @anthropic-ai/claude-code --print
+    // NOT: npx @anthropic-ai/claude-code -p "prompt"
     const isWin = process.platform === "win32";
-    // On Windows, .cmd files can't be spawned directly without shell:true,
-    // which triggers a deprecation warning. Use cmd.exe explicitly instead.
-    const escapedPrompt = prompt.replace(/"/g, '\\"');
-    const cmdLine = `npx.cmd @anthropic-ai/claude-code -p "${escapedPrompt}"`;
-    const child = spawn(
-      isWin ? "cmd.exe" : "npx",
-      isWin ? ["/d", "/s", "/c", cmdLine] : ["@anthropic-ai/claude-code", "-p", prompt],
-      {
-        cwd: process.cwd(),
-        stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env },
-      }
-    );
+    const cmd = isWin ? "cmd.exe" : "npx";
+    const args = isWin
+      ? ["/d", "/s", "/c", "npx.cmd @anthropic-ai/claude-code --print"]
+      : ["@anthropic-ai/claude-code", "--print"];
+    const child = spawn(cmd, args, {
+      cwd: process.cwd(),
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    // Write prompt via stdin, then close so Claude starts processing
+    child.stdin.write(prompt);
+    child.stdin.end();
 
     let output = "";
     child.stdout.on("data", (d) => {
       output += d.toString();
       task.result = output;
     });
+    // stderr is also captured for diagnostics
     child.stderr.on("data", (d) => {
       output += d.toString();
       task.result = output;
