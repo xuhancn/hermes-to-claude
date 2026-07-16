@@ -126,19 +126,32 @@ node src/hbridge/cli.mjs --help
 
 ## Usage
 
+### 1. Start hbridge
+
 ```bash
-# Start bridge
 node src/hbridge/cli.mjs --enable xu
-
-# Add another user
-node src/hbridge/cli.mjs --user add han
-
-# Stop bridge
-node src/hbridge/cli.mjs --disable
 ```
 
-Hermes connects via HTTP to `localhost:9190` with the generated key.
+### 2. Load into Claude Code (MCP)
 
+Add to ~/.claude/claude_desktop_config.json:
+
+```json
+{
+  "mcpServers": {
+    "hbridge": {
+      "command": "node",
+      "args": ["dist/hbridge.mjs", "--stdio"]
+    }
+  }
+}
+```
+
+### 3. Send tasks from Hermes
+
+```bash
+curl -X POST http://localhost:9190/v1/task/create   -H "Authorization: Basic $(echo -n xu:hb_KEY | base64)"   -d '{"prompt": "Fix StockMan bug"}'
+```
 ## Protocol
 
 hbridge exposes REST endpoints on port 9190:
