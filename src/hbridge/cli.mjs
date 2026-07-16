@@ -25,7 +25,13 @@ async function cmd_enable(username) {
     });
   }
 
-  const key = users.add(username);
+  // Reuse existing key if user already exists
+  let key;
+  if (users.list()[username]) {
+    key = users.list()[username].key;
+  } else {
+    key = users.add(username);
+  }
   const ips = getLocalIPs();
   
   console.log(`
