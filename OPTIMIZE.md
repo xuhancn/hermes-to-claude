@@ -1,52 +1,50 @@
 # Optimization Ideas
 
-Rough edges in the current codebase, ranked by impact.
-
-## 🔴 High
-
-### 1. test_setup_mcp.mjs broken on Windows
-`tests/test_setup_mcp.mjs` uses `/tmp/test_claude_config_mcp` (Linux path) and expects `claude_desktop_config.json` format, but `setup-mcp.cjs` writes to `~/.claude.json`. The test is stale.
-
-### 2. bridge.mjs getTaskOutput() reads from memory, not inbox
-`getTaskOutput(taskId)` returns from in-memory `this.tasks` Map. If the process restarts, results are lost. The MCP HTTP server reads from inbox correctly, but `bridge.mjs`'s own method doesn't. Two code paths, inconsistent.
-
-**Fix:** `getTaskOutput()` falls back to `readInbox()` if task not in memory.
-
-### 3. Sequential execution, no queue
-`createTask()` spawns immediately regardless of whether a previous task is still running. If Hermes sends 5 tasks, 5 Claude processes fight for resources. No queue, no concurrency limit.
+Current state after persistent Claude process + JSON-RPC refactor.
 
 ## 🟡 Medium
 
-### 4. No task timeout
-If Claude --print hangs (network issue, infinite loop), the task stays "running" forever. inbox never gets result, statusLine shows 📨 forever.
+### 1. Sequential queue blocks new tasks
+`createTask()` polls `setInterval` until previous task finishes. No parallelism.
+**Fix:** Use proper promise queue (e.g. p-queue) instead of busy-poll.
 
-**Fix:** `_spawn()` sets a timeout (e.g. 5 min), `kill()` on expiry, updates inbox to "failed".
+### 2. No task timeout
+If Claude --print hangs, task stays "running" forever, next task never starts.
+**Fix:** `_finishTask` timeout (e.g. 5 min) → kill and restart Claude process.
 
-### 5. Orphaned processes on shutdown
-When hbridge stops (disable/exit), running Claude --print child processes are orphaned. They keep running in the background.
+### 3. StatusLine only shows on/off
+No task info in bottom bar. User asked for "format A" earlier.
+**Fix:** Expose current task info via state.mjs, statusline reads it.
 
-**Fix:** Track child PIDs, kill on process exit.
-
-### 6. Chat log no rotation
-`~/.hbridge_chat.log` grows indefinitely. No max size, no rotation.
-
-**Fix:** Truncate to last N lines on each write, or rotate at 1MB.
-
-### 7. hbridge_inbox.json max 20 but no purge
-`MAX_INBOX = 20` slices the array, but completed tasks accumulate. No cleanup of old done tasks.
-
-**Fix:** Auto-purge done tasks older than 24h on write.
+### 4. State file not cleaned up
+`~/.hbridge_state.json` stays as `running: false` after disable. No auto-cleanup.
+**Fix:** Delete state file on disable.
 
 ## 🟢 Low
 
-### 8. statusLine +N more is vague
-`+2 more` doesn't tell the user what those tasks are. Could show exit code summary: `+2 ✅`.
+### 5. Auth base64 parsing fragile
+`Buffer.from(b64,"base64").toString().split(":")` breaks if key contains `:`.
+**Fix:** Use lastIndexOf(":") to split username from key.
 
-### 9. Status icons limited
-📨 running / ✅ exit:0 / ❌ failed. But no partial/failure detail in status bar.
+### 6. test_bridge.mjs needs update
+Tests Bridge instance methods but new Bridge auto-spawns Claude on construction.
+**Fix:** Make Claude spawn lazy (on first createTask).
 
-### 10. No health endpoint on legacy server.mjs
-If CLI path (`--enable`) is used instead of MCP, the server.mjs HTTP server handles health, but doesn't have the inbox-based task/output endpoint. Two diverging implementations.
+### 7. No Claude process health check
+If child Claude process crashes, Bridge auto-restarts it on next createTask. But if it crashes repeatedly, no backoff.
+**Fix:** Add restart limit + exponential backoff.
 
-### 11. Auth base64 parsing fragile
-`Buffer.from(b64, "base64").toString().split(":")` breaks if key or username contains `:`.
+### 8. hbridge_state.json writes synchronously
+`writeFileSync` blocks the event loop on every state update. Low impact but unnecessary.
+**Fix:** Use `writeFile` (async) for state writes.
+
+## ✅ Resolved in v0.3
+
+| Item | Status |
+|------|--------|
+| Inbox persistence | Removed (no files) |
+| Chat log | Removed |
+| EADDRINUSE race | Resolved (single HTTP server) |
+| Spawn -p escaping | Resolved (JSON-RPC stdin) |
+| Cold start per task | Resolved (persistent process) |
+| 3-failure liveness debounce | Removed (simple on/off) |

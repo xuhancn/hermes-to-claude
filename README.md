@@ -1,10 +1,11 @@
 # Hermes-Claude-Bridge (hbridge)
 
-Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — no Pro/Max subscription required.
+Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persistent JSON-RPC process — no Pro/Max subscription required.
 
 ```
-Hermes ──HTTP──▶ hbridge:9190 ──stdio(MCP)──▶ Claude Code
-  (remote)        转发器            (auto-registered via postinstall)
+Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print)
+  (remote)                  (JSON-RPC)    stdin: {"type":"user","message":...}
+                                          stdout: {"type":"result","subtype":"success"}
 ```
 
 ## Why hbridge
@@ -57,25 +58,24 @@ All endpoints require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
 ### Task Lifecycle
 
 ```
-Hermes                          hbridge:9190                    Claude Code (local)
+Hermes                          hbridge:9190                    Claude Code (persistent)
   │                                │                                │
   │  POST /v1/task/create          │                                │
   │  {"prompt":"fix bug"}          │                                │
   │──────────────────────────────▶│                                │
-  │                                │  inbox: {status:"running"}     │
-  │  {"task_id":"task_xxx",       │  statusLine: 📨 "fix bug"      │
-  │   "status":"created"}         │                                │
-  │◀──────────────────────────────│                                │
-  │                                │  spawn("npx @anthropic-ai/    │
-  │                                │    claude-code", "-p","fix bug")│
+  │  {"task_id":"task_xxx",       │  stdin: {"type":"user",         │
+  │   "status":"created"}         │    "message":{"content":        │
+  │◀──────────────────────────────│      "fix bug"}}               │
   │                                │──────────────────────────────▶│
   │                                │                                │  execute
-  │                                │    stdout collected           │
+  │                                │    stdout: {"type":"assistant",│
+  │                                │      "message":{"content":[    │
+  │                                │        {"type":"text",         │
+  │                                │         "text":"Fixed..."}]}}  │
   │                                │◀──────────────────────────────│
-  │                                │  inbox: {status:"done",       │
-  │                                │    result:"Fixed...",         │
-  │                                │    exitCode:0}                │
-  │                                │  statusLine: ✅ "fix bug"     │
+  │                                │    stdout: {"type":"result",   │
+  │                                │      "subtype":"success"}      │
+  │                                │◀──────────────────────────────│
   │                                │                                │
   │  GET /v1/task/output?          │                                │
   │    task_id=task_xxx            │                                │
@@ -140,51 +140,34 @@ hbridge auto-registers as an MCP server on `npm install` (via `postinstall`):
 
 ### Status Bar
 
-When hbridge is running, the bottom-right corner shows real-time task status:
+When hbridge is running, the bottom-right corner shows service status (Claude Code polls ~3-5s):
 
 ```
-hbridge: on | :9190 | 📨 "echo hello"     ← task running
-hbridge: on | :9190 | ✅ "fix bug"        ← task done
-hbridge: off                              ← hbridge stopped
-```
-
-### Real-time Task Log
-
-```bash
-tail -f ~/.hbridge_chat.log
-```
-
-```
-[22:54:01] ▶ Hermes → Claude: "echo fresh task"
-[22:54:35] ✅ Claude → Hermes: exit:0 "Done — echoed."
+hbridge: on | :9190     ← service running
+hbridge: off             ← service stopped
 ```
 
 ## Architecture
 
 ```
-                    ┌────────────────────────────────┐
-                    │        hbridge process          │
-                    │  ┌──────────┐  ┌──────────┐   │
-Hermes ──HTTP──▶    │  │ mcp.mjs  │  │server.mjs│   │
-                    │  │ (MCP     │  │ (HTTP    │   │
-                    │  │  stdio)  │  │  fallback│   │
-                    │  └────┬─────┘  └──────────┘   │
-                    │       │                         │
-                    │  ┌────▼─────┐                    │
-                    │  │bridge.mjs│──spawn──▶ Claude  │
-                    │  │ (+inbox) │          Code CLI │
-                    │  └──────────┘                    │
-                    │       │                         │
-                    │  ┌────▼─────┐                    │
-                    │  │state.mjs │──┐                  │
-                    │  └──────────┘  │                  │
-                    └────────────────┼──────────────────┘
-                                     │
-                    ┌────────────────▼────────┐
-                    │  ~/.hbridge_state.json   │
-                    │  ~/.hbridge_inbox.json   │
-                    │  ~/.hbridge_chat.log     │
-                    └─────────────────────────┘
+Hermes ──HTTP──▶ hbridge:9190
+                    │
+              ┌─────▼──────┐
+              │  mcp.mjs   │── MCP stdio ──▶ Claude Code
+              │  (HTTP +   │                    │
+              │   MCP)     │◀─ JSON-RPC ────────┘
+              └─────┬──────┘   stdin/stdout
+                    │          (persistent --print
+              ┌─────▼──────┐    stream-json)
+              │ bridge.mjs │
+              │ (persistent│
+              │  Claude    │
+              │  process)  │
+              └────────────┘
+                    │
+              ┌─────▼──────┐
+              │ state.mjs  │── ~/.hbridge_state.json
+              └────────────┘
 ```
 
 ## CLI Commands
@@ -205,6 +188,8 @@ hbridge --stdio                  # Run as MCP server (stdin/stdout)
 for f in tests/test_*.mjs; do node "$f"; done
 # 354 tests, 7 suites
 ```
+
+Note: `test_setup_mcp.mjs` requires Linux paths (stale test, needs update).
 
 ## Cross-Platform
 
