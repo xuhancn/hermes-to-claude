@@ -1,107 +1,165 @@
 import { spawn } from "child_process";
-import { writeFileSync, mkdirSync } from "fs";
-import { pushToInbox, updateInbox, chatLog } from "./state.mjs";
+import { createInterface } from "readline";
 
-const TASKS_DIR = "./hbridge_tasks";
+/**
+ * Bridge — persistent Claude Code process manager.
+ *
+ * Spawns ONE Claude process with --print --input-format stream-json
+ * --output-format stream-json. Tasks sent as JSON-RPC messages via
+ * stdin. Results parsed from NDJSON on stdout.
+ *
+ *   → {"type":"user","message":{"content":"fix bug"}}
+ *   ← {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+ *   ← {"type":"result","subtype":"success"}
+ */
+
+const CLAUDE_ARGS = [
+  "@anthropic-ai/claude-code",
+  "--print",
+  "--input-format", "stream-json",
+  "--output-format", "stream-json",
+];
 
 export class Bridge {
   constructor() {
-    this.tasks = new Map();
-    mkdirSync(TASKS_DIR, { recursive: true });
+    this.child = null;
+    this.busy = false;
+    this.currentTask = null;  // {id, prompt, status, result, exitCode}
+    this._results = new Map(); // in-memory task results for /task/output
+    this._taskResolve = null;  // resolve() for the current task promise
+    this._startClaude();
   }
 
-  async createTask(prompt, opts = {}) {
-    const id = `task_${Date.now()}`;
-    const task = {
-      id,
-      prompt,
-      status: "running",
-      result: "",
-      exitCode: null,
-      created: Date.now(),
-    };
-    this.tasks.set(id, task);
-
-    // Spawn Claude Code (async, updates task when done)
-    this._spawn(id, prompt);
-    return { task_id: id, status: "created" };
-  }
-
-  _spawn(id, prompt) {
-    const task = this.tasks.get(id);
-    if (!task) return;
-
-    // Write to inbox for statusline
-    pushToInbox({ id, prompt, status: "running", created: Date.now() });
-    chatLog("▶ Hermes → Claude:", prompt.slice(0, 120));
-
-    // Claude CLI expects prompt via stdin with --print flag:
-    //   echo "prompt" | npx @anthropic-ai/claude-code --print
-    // NOT: npx @anthropic-ai/claude-code -p "prompt"
+  _startClaude() {
+    if (this.child) return;
     const isWin = process.platform === "win32";
     const cmd = isWin ? "cmd.exe" : "npx";
-    const args = isWin
-      ? ["/d", "/s", "/c", "npx.cmd @anthropic-ai/claude-code --print"]
-      : ["@anthropic-ai/claude-code", "--print"];
-    const child = spawn(cmd, args, {
-      cwd: process.cwd(),
+    const args = isWin ? ["/d", "/s", "/c", `npx.cmd ${CLAUDE_ARGS.join(" ")}`] : CLAUDE_ARGS;
+
+    this.child = spawn(cmd, args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env },
     });
 
-    // Write prompt via stdin, then close so Claude starts processing
-    child.stdin.write(prompt);
-    child.stdin.end();
-
-    let output = "";
-    child.stdout.on("data", (d) => {
-      output += d.toString();
-      task.result = output;
-    });
-    // stderr is also captured for diagnostics
-    child.stderr.on("data", (d) => {
-      output += d.toString();
-      task.result = output;
+    this.child.on("error", (err) => {
+      this._failTask(`spawn error: ${err.message}`);
+      this.child = null;
     });
 
-    child.on("close", (code) => {
-      task.status = "done";
-      task.exitCode = code;
-      task.result = output;
-      writeFileSync(`${TASKS_DIR}/${id}.txt`, output);
-      updateInbox(id, { status: "done", exitCode: code, result: output, finished: Date.now() });
-      chatLog("✅ Claude → Hermes:", `exit:${code} "${output.slice(0, 100)}"`);
+    this.child.on("close", () => {
+      this._failTask("process exited unexpectedly");
+      this.child = null;
     });
 
-    child.on("error", (err) => {
-      task.status = "failed";
-      task.result = err.message;
-      updateInbox(id, { status: "failed", result: err.message, finished: Date.now() });
+    const rl = createInterface({ input: this.child.stdout });
+    rl.on("line", (line) => {
+      try {
+        const msg = JSON.parse(line);
+        this._onMessage(msg);
+      } catch {}
     });
-
-    return { task_id: id };
   }
 
-  getTask(id) {
-    const task = this.tasks.get(id);
-    if (!task) return null;
-    return {
-      id: task.id,
-      status: task.status,
-      created: task.created,
-    };
+  _onMessage(msg) {
+    if (!this.currentTask) return;
+
+    switch (msg.type) {
+      case "assistant":
+        if (msg.message?.content) {
+          for (const block of msg.message.content) {
+            if (block.type === "text") {
+              this.currentTask.result += block.text;
+            }
+          }
+        }
+        break;
+      case "result":
+        if (msg.subtype === "success") {
+          this._finishTask(0);
+        }
+        break;
+    }
   }
 
-  getTaskOutput(id) {
-    const task = this.tasks.get(id);
-    if (!task) return null;
+  _finishTask(exitCode) {
+    if (!this.currentTask) return;
+    const t = this.currentTask;
+    t.status = "done";
+    t.exitCode = exitCode;
+    this._results.set(t.id, { ...t });
+    this.busy = false;
+    this.currentTask = null;
+    if (this._taskResolve) {
+      this._taskResolve();
+      this._taskResolve = null;
+    }
+  }
+
+  _failTask(reason) {
+    if (!this.currentTask) return;
+    const t = this.currentTask;
+    t.status = "failed";
+    t.result = reason;
+    this._results.set(t.id, { ...t });
+    this.busy = false;
+    this.currentTask = null;
+    if (this._taskResolve) {
+      this._taskResolve();
+      this._taskResolve = null;
+    }
+  }
+
+  async createTask(prompt) {
+    const id = `task_${Date.now()}`;
+
+    if (!this.child || this.child.killed) {
+      this._startClaude();
+    }
+
+    // Queue: wait for previous task to finish
+    if (this.busy) {
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (!this.busy) { clearInterval(check); resolve(); }
+        }, 100);
+      });
+    }
+
+    // Set up current task
+    this.currentTask = { id, prompt, status: "running", result: "", exitCode: null };
+    this.busy = true;
+
+    const taskDone = new Promise((resolve) => {
+      this._taskResolve = resolve;
+    });
+
+    // Send prompt via JSON-RPC
+    const msg = JSON.stringify({ type: "user", message: { content: prompt } }) + "\n";
+    this.child.stdin.write(msg);
+
+    // Wait for result NDJSON
+    await taskDone;
+
+    return { task_id: id, status: "created" };
+  }
+
+  getTask(taskId) {
+    const t = this._results.get(taskId) || (this.currentTask?.id === taskId ? this.currentTask : null);
+    if (!t) return null;
+    return { id: t.id, status: t.status, created: 0 };
+  }
+
+  getTaskOutput(taskId) {
+    const t = this._results.get(taskId) || (this.currentTask?.id === taskId ? this.currentTask : null);
+    if (!t) return null;
+    const done = t.status === "done" || t.status === "failed";
     return {
-      retrieval_status: task.status === "done" ? "success" : "pending",
+      retrieval_status: done ? "success" : "pending",
       task: {
-        id: task.id,
-        status: task.status,
-        result: task.result || "",
-        exitCode: task.exitCode,
+        id: t.id,
+        status: t.status,
+        result: t.result || "",
+        exitCode: t.exitCode ?? null,
       },
     };
   }

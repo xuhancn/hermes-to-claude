@@ -2,7 +2,7 @@ import http from "http";
 import { execSync } from "child_process";
 import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
-import { markRunning, markStopped, readInbox } from "./state.mjs";
+import { markRunning, markStopped } from "./state.mjs";
 
 export function startMcpServer() {
   // Global crash protection — keep MCP alive even if something slips through
@@ -59,9 +59,7 @@ function handleMcp(msg, users, bridge) {
   } else if (method === "tools/call") {
     try {
       const { name, arguments: args = {} } = params;
-    // Drain pending Hermes notifications into every tool response
-    const notif = drainNotifications();
-    let t = notif;
+    let t = "";
     if (name === "hbridge_enable") {
       const uname = args.user || "bridge";
       const u = users.list();
@@ -72,11 +70,7 @@ function handleMcp(msg, users, bridge) {
       markStopped();
       t = "disabled";
     } else if (name === "hbridge_status") {
-      const inbox = readInbox();
-      const recent = inbox.slice(-5).reverse().map(t =>
-        `${t.status === "done" ? "✅" : "⏳"} Hermes: "${t.prompt.slice(0, 60)}"${t.status === "done" ? ` → exit:${t.exitCode}` : ""}`
-      ).join("\n");
-      t = `hbridge running on :${9190} | Users: ${Object.keys(users.list()).join(", ")}${recent ? `\n\nRecent tasks:\n${recent}` : "\n\nNo recent tasks"}`;
+      t = `hbridge running on :${9190} | Users: ${Object.keys(users.list()).join(", ")}`;
     } else if (name === "hbridge_user_add") {
       const ex = users.list();
       t = ex[args.name] ? ex[args.name].key : users.add(args.name);
@@ -98,27 +92,7 @@ function handleMcp(msg, users, bridge) {
   }
 }
 
-// ─── Pending notifications (unread Hermes messages for Claude) ─────────
-// These are prepended to the NEXT MCP tool response so Claude sees them.
-let pendingNotifications = [];
-
-/** Called by HTTP handler when a Hermes task arrives. */
-function pushNotification(taskId, prompt) {
-  pendingNotifications.push({ taskId, prompt, time: new Date().toLocaleTimeString() });
-  if (pendingNotifications.length > 5) pendingNotifications.shift();
-}
-
-/** Drain pending notifications into a human-readable string. */
-function drainNotifications() {
-  if (pendingNotifications.length === 0) return "";
-  const lines = pendingNotifications.map(
-    (n) => `📨 Hermes: "${n.prompt.slice(0, 80)}"`,
-  );
-  pendingNotifications = [];
-  return `─── New from Hermes ───\n${lines.join("\n")}\n────────────────────\n`;
-}
-
-// ─── HTTP inbox server (same process as MCP → stderr → Claude UI) ──────
+// ─── HTTP server (same process as MCP) ──────────────────────────────────
 
 let inboxServer = null;
 
@@ -158,7 +132,6 @@ function startInboxServer(users, bridge) {
           try {
             const prompt = JSON.parse(body).prompt || "";
             const result = await bridge.createTask(prompt);
-            pushNotification(result.task_id, prompt);
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(result));
           } catch (e) {
@@ -173,28 +146,14 @@ function startInboxServer(users, bridge) {
         const taskId = new URL(`http://localhost${req.url}`).searchParams.get(
           "task_id"
         );
-        // Read from inbox file (persistent, not memory)
-        const inbox = readInbox();
-        const entry = inbox.find((t) => t.id === taskId);
-        if (!entry) {
+        const result = bridge.getTaskOutput(taskId);
+        if (!result) {
           res.writeHead(404);
           res.end(JSON.stringify({ error: "not_found" }));
           return;
         }
-        const done = entry.status === "done";
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            retrieval_status: done ? "success" : "pending",
-            task: {
-              id: entry.id,
-              status: entry.status,
-              result: entry.result || "",
-              exitCode: entry.exitCode ?? null,
-              prompt: entry.prompt,
-            },
-          })
-        );
+        res.end(JSON.stringify(result));
         return;
       }
 
