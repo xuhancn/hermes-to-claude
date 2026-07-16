@@ -1,5 +1,4 @@
 import http from "http";
-import { execSync } from "child_process";
 import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readInbox } from "./state.mjs";
@@ -176,21 +175,10 @@ function startInboxServer(users, bridge) {
 
   inboxServer.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
-      process.stderr.write(`[hbridge] Port 9190 in use, killing old process...\n`);
-      inboxServer = null;
-      try {
-        const pid = execSync(
-          `fuser 9190/tcp 2>/dev/null || lsof -ti :9190 2>/dev/null`,
-          { encoding: "utf8", timeout: 3000 }
-        ).trim();
-        if (pid) {
-          execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 2000 });
-          process.stderr.write(`[hbridge] Killed PID ${pid}, retrying...\n`);
-        }
-      } catch {
-        // fuser/lsof not available
-      }
-      setTimeout(() => startInboxServer(users, bridge), 500);
+      process.stderr.write(`[hbridge] Port 9190 already in use — reusing\n`);
+      // Port is already serving — mark running and use it
+      inboxServer = null; // allow future restart if this one dies
+      markRunning(9190, Object.keys(users.list()));
       return;
     }
     process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
