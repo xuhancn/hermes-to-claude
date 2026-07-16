@@ -1,5 +1,7 @@
 # Hermes-Claude-Bridge
 
+> Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
+
 本地 JSON-RPC 桥接，让 Hermes Agent 与 Claude Code 双向互通——不依赖 Anthropic Pro/Max 订阅。
 
 ## 设计
@@ -16,8 +18,7 @@ Hermes Agent                    Claude Code CLI
   - task.stop                     - Git操作
 ```
 
-Hermes 通过 `npx claude mcp serve`（Claude Code 内置 MCP）启动桥进程，
-双方通过 stdio 传输 JSON-RPC 消息。
+Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdio 传输 JSON-RPC 消息。
 
 ## 依赖
 
@@ -144,40 +145,6 @@ MIT
                             └─────────────────┘
 ```
 
-On the Mac: `node bridge.mjs --http :9090`
+On the Mac: `node dist/bridge.mjs --http :9090`
 On the remote: `ssh -L 9090:localhost:9090 mac-mini` → Hermes calls `localhost:9090`
-
-
-## 安全开关
-
-Bridge 默认关闭——防止未授权远程访问。
-
-```bash
-# 开启
-node bridge.mjs --enable
-
-# 关闭
-node bridge.mjs --disable
-
-# 查看状态
-node bridge.mjs --status
-# → Bridge: OFF (default)
-```
-
-开启条件：必须显式设置环境变量 `BRIDGE_TOKEN=xxx` 作为认证令牌。
-远程请求须携带 `Authorization: Bearer <BRIDGE_TOKEN>` 头。
-
-```bash
-# 启动（需 token）
-BRIDGE_TOKEN=my-secret node bridge.mjs --enable --http :9090
-```
-
-Hermes 侧配置添加 token：
-
-```yaml
-mcp_servers:
-  remote_claude:
-    url: "http://mac-mini:9090"
-    token: "my-secret"
-```
 
