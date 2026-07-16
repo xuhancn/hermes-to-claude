@@ -1,5 +1,6 @@
 import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
+import { createServer, startStatusBar } from "./server.mjs";
 
 export function startMcpServer() {
   const users = new UserManager();
@@ -34,7 +35,7 @@ function handleMcp(msg, users, bridge) {
   else if (method === "tools/call") {
     const { name, arguments: args = {} } = params;
     let t = "";
-    if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); }
+    if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); const srv = createServer(users); srv.listen(9190, () => { startStatusBar(users, bridge); }); }
     else if (name === "hbridge_disable") t = "disabled";
     else if (name === "hbridge_status") t = JSON.stringify({ running: true, port: 9190, users: Object.keys(users.list()), tasks: bridge.tasks ? bridge.tasks.size : 0 });
     else if (name === "hbridge_user_add") { const ex = users.list(); t = ex[args.name] ? ex[args.name].key : users.add(args.name); }
