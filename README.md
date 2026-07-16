@@ -15,19 +15,14 @@ Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscrip
 ### Architecture
 
 ```
-Hermes Agent                    hbridge                     Claude Code CLI
-       │                            │                              │
-       │──── HTTP ────────────────▶│                              │
-       │      Auth: hb_XxXx-XxXx   │                              │
-       │                            │──── spawn ─────────────────▶│
-       │                            │                              │
-       │      TaskCreate ──────────▶│──── prompt ────────────────▶│
-       │◀──── TaskOutput ──────────│◀─── result ─────────────────│
+Hermes ──HTTP──▶ hbridge:9190 ──stdio(MCP)──▶ Claude Code
+  (remote)        转发器            (auto-registered via npm)
+                      │
+               hb_XxXx-XxXx
+               npm install -g → postinstall → ✓
 ```
 
-hbridge runs as a local HTTP server. Hermes connects via HTTP, hbridge spawns Claude Code.
-
-**hbridge spawns Claude Code** — you don't load hbridge into Claude. hbridge starts Claude on demand via  when Hermes sends a task.
+hbridge auto-registers as a Claude Code MCP server on install. All interaction is through Claude Code.
 
 ## Commands
 
@@ -78,67 +73,73 @@ Point Hermes config to localhost:9190.
 - **Claude Code CLI**(npx @anthropic-ai/claude-code, cc-switch compatible)
 - **Hermes Agent** any version
 
-## Build (All Platforms)
+## Developer Flow
 
-TypeScript project, builds to a single executable:
+### 1. Install Node.js
+
+**Linux**
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+**macOS**
+```bash
+brew install node@22
+```
+
+**Windows**
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+### 2. Clone + Build + Install
 
 ```bash
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install
-npm run build          # → dist/bridge.mjs
+npm run build
+npm install -g .             # → hbridge command available
 ```
 
-## Install
-
-### Linux
+### 3. Verify
 
 ```bash
-# 1. Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# 2. Clone + build
-git clone <repo> && cd hermes-claude-bridge
-npm install && npm run build
-
-# 3. Verify
-node src/hbridge/cli.mjs --help
+hbridge --help
 ```
 
-### macOS
-
-```bash
-brew install node@22
-git clone <repo> && cd hermes-claude-bridge
-npm install && npm run build
-node src/hbridge/cli.mjs --help
-```
-
-### Windows
-
-```powershell
-winget install OpenJS.NodeJS.LTS
-git clone <repo> ; cd hermes-claude-bridge
-npm install ; npm run build
-node src/hbridge/cli.mjs --help
-```
-
+That is it. Open Claude Code and use `/mcp hbridge enable`.
 ## Usage
 
+> See [HERMES.md](HERMES.md) for the Hermes Agent integration guide.
+
+### 1. Start hbridge
+
 ```bash
-# Start bridge
 node src/hbridge/cli.mjs --enable xu
-
-# Add another user
-node src/hbridge/cli.mjs --user add han
-
-# Stop bridge
-node src/hbridge/cli.mjs --disable
 ```
 
-Hermes connects via HTTP to `localhost:9190` with the generated key.
+### 2. Load into Claude Code (MCP)
 
+Add to ~/.claude/claude_desktop_config.json:
+
+```json
+{
+  "mcpServers": {
+    "hbridge": {
+      "command": "node",
+      "args": ["dist/hbridge.mjs", "--stdio"]
+    }
+  }
+}
+```
+
+### 3. Send tasks from Hermes
+
+```bash
+curl -X POST http://localhost:9190/v1/task/create   -H "Authorization: Basic $(echo -n xu:hb_KEY | base64)"   -d '{"prompt": "Fix StockMan bug"}'
+```
 ## Protocol
 
 hbridge exposes REST endpoints on port 9190:

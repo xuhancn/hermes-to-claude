@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/bridge.js",
     "test": "echo 'ok'",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "postinstall": "node scripts/setup-mcp.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
@@ -21,5 +22,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
+  },
+  "bin": {
+    "hbridge": "dist/hbridge.mjs"
   }
 }
