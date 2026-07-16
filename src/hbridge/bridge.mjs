@@ -23,6 +23,7 @@ const CLAUDE_ARGS = [
   "--input-format", "stream-json",
   "--output-format", "stream-json",
   "--verbose",
+  "--dangerously-skip-permissions",
 ];
 
 const MAX_RESTARTS = 3;
