@@ -24,7 +24,7 @@ function handleMcp(msg, users, bridge) {
   if (method === "initialize") {
     respond({ jsonrpc: "2.0", id, result: {
       protocolVersion: "2024-11-05",
-      capabilities: { tools: {} },
+      capabilities: { tools: { listChanged: true } },
       serverInfo: { name: "hbridge", version: "1.0.0" }
     }});
   }
