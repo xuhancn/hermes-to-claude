@@ -94,3 +94,23 @@ hermes bridge add dev \
 ## Open Source
 
 Target: MIT License — 功能完备后才考虑开源
+
+## User Flow (Target)
+
+```
+$ npm install -g hbridge
+
+$ hbridge --setup
+  ✓ Found Claude Code
+  ✓ Registered in MCP config
+  ✓ Key: hb_KxVq-RmZp
+
+$ claude mcp enable hbridge
+  ✓ hbridge enabled :9190
+
+$ claude mcp hbridge task-create "Fix StockMan bug"
+  ✓ task_001
+
+$ claude mcp hbridge task-output task_001
+  ✓ PR ready — 3 files changed
+```
