@@ -15,13 +15,14 @@ Local JSON-RPC bridge connecting Hermes Agent to Claude Code — no Pro/Max subs
 ### Architecture
 
 ```
-Hermes Agent ──HTTP──▶ hbridge :9190 ──spawn──▶ Claude Code CLI
-    │                     │
-    │                 Auth: hb_XXXX-XXXX
-    │                 Users: add/del/key/list
-    │                     │
-    │              TaskCreate → Claude writes code
-    │              TaskOutput → results returned
+Hermes Agent                    hbridge                     Claude Code CLI
+       │                            │                              │
+       │──── HTTP ────────────────▶│                              │
+       │      Auth: hb_XxXx-XxXx   │                              │
+       │                            │──── spawn ─────────────────▶│
+       │                            │                              │
+       │      TaskCreate ──────────▶│──── prompt ────────────────▶│
+       │◀──── TaskOutput ──────────│◀─── result ─────────────────│
 ```
 
 hbridge runs as a local HTTP server. Hermes connects via HTTP, hbridge spawns Claude Code.
