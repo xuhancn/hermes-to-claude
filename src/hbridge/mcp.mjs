@@ -1,6 +1,7 @@
 import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
 import { createServer, startStatusBar } from "./server.mjs";
+import http from "http";
 
 export function startMcpServer() {
   const users = new UserManager();
@@ -35,7 +36,21 @@ function handleMcp(msg, users, bridge) {
   else if (method === "tools/call") {
     const { name, arguments: args = {} } = params;
     let t = "";
-    if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); const srv = createServer(users); srv.listen(9190); }
+    if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); const srv = http.createServer((req, res) => {
+    if (req.url === "/health") { res.writeHead(200, {"Content-Type":"application/json"}).end(JSON.stringify({status:"ok"})); return; }
+    if (req.method === "POST" && req.url === "/v1/task/create") {
+      let b = ""; req.on("data", d => b += d);
+      req.on("end", () => {
+        let prompt = "";
+        try { prompt = JSON.parse(b).prompt; } catch(e) { prompt = b; }
+        process.stdout.write(JSON.stringify({type:"hermes_task",prompt}) + String.fromCharCode(10));
+        res.writeHead(200, {"Content-Type":"application/json"}).end(JSON.stringify({task_id:"inbox_"+Date.now(),status:"submitted"}));
+      });
+      return;
+    }
+    res.writeHead(404, {"Content-Type":"application/json"}).end(JSON.stringify({error:"not_found"}));
+  });
+  srv.listen(9190); }
     else if (name === "hbridge_disable") t = "disabled";
     else if (name === "hbridge_status") t = JSON.stringify({ running: true, port: 9190, users: Object.keys(users.list()), tasks: bridge.tasks ? bridge.tasks.size : 0 });
     else if (name === "hbridge_user_add") { const ex = users.list(); t = ex[args.name] ? ex[args.name].key : users.add(args.name); }
