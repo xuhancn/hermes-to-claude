@@ -6,9 +6,10 @@ Local JSON-RPC bridge connecting Hermes Agent to Claude Code — no Pro/Max subs
 
 ## Design
 
-### Local Mode (stdio)
+## Why hbridge\n\n- **Leverages Claude Code built-in security** — Auto Mode protects your filesystem\n- **Simpler than SSH** — no key pairs, no authorized_keys\n- **Zero external API** — local-only, no subscription\n- **Independent auth** — hb_ keys, not OS accounts\n- **Default-off** — no attack surface when disabled
 
-Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdin/stdout 传输 JSON-RPC 消息：
+### Architecture
+
 
 ```
 Hermes Agent                    Claude Code CLI
