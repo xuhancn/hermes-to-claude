@@ -1,0 +1,16 @@
+{
+  "name": "hermes-claude-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local JSON-RPC bridge between Hermes Agent and Claude Code",
+  "main": "dist/bridge.mjs",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
