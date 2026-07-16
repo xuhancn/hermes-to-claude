@@ -111,22 +111,22 @@ function showHelp() {
   hbridge — Hermes Bridge 
 
   COMMANDS:
-    hbridge --enable [-u user]   启动 Bridge + 生成 Key
-    hbridge --disable            关闭 Bridge
-    hbridge --status             查看详细状态
-    hbridge --help               显示此帮助
+    hbridge --enable [-u user]   Start bridge + generate key
+    hbridge --disable            Stop bridge
+    hbridge --status             Show detailed status
+    hbridge --help               Show this help
 
   USER MANAGEMENT:
-    hbridge --user add [name]    添加用户
-    hbridge --user del <name>    删除用户
-    hbridge --user key <name>    重新生成 Key
-    hbridge --user list          列出所有用户
+    hbridge --user add [name]    Add user
+    hbridge --user del <name>    Delete user
+    hbridge --user key <name>    Regenerate key
+    hbridge --user list          List all users
 
   EXAMPLES:
-    hbridge --enable             首次启动，输入用户名
-    hbridge --enable xu          以 xu 身份启动
-    hbridge --user add han       添加用户 han
-    hbridge --status             查看谁在连
+    hbridge --enable             First start, enter username
+    hbridge --enable xu          Start as xu
+    hbridge --user add han       Add user han
+    hbridge --status             Show active connections
   `);
   process.exit(0);
 }
