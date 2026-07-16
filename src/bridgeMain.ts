@@ -2997,3 +2997,10 @@ function createHeadlessBridgeLogger(log: (s: string) => void): BridgeLogger {
     refreshDisplay: noop,
   }
 }
+
+// ─── CLI entry point ──────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2)
+if (args.length > 0 && (args[0] === '--help' || args[0] === '-h')) {
+  bridgeMain(args).catch(console.error)
+}
