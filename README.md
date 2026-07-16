@@ -19,7 +19,7 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio(MCP)──▶ Claude Code
   (remote)        转发器            (auto-registered via npm)
                       │
                hb_XxXx-XxXx
-               npm install -g → postinstall → ✓
+               sudo npm install -g . postinstall → ✓
 ```
 
 hbridge auto-registers as a Claude Code MCP server on install. All interaction is through Claude Code.
@@ -100,7 +100,7 @@ git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install
 npm run build
-npm install -g .             # → hbridge command available
+sudo npm install -g .             # → hbridge command available
 ```
 
 ### 3. Verify
