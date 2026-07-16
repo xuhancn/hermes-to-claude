@@ -18,13 +18,9 @@ try {
   }
   
   if (!config.mcpServers) config.mcpServers = {};
-  if (!config.mcpServers.hbridge) {
-    config.mcpServers.hbridge = HBRIDGE_ENTRY;
-    fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
-    console.log("✓ hbridge registered in Claude Code MCP config");
-  } else {
-    console.log("✓ hbridge already registered");
-  }
+  config.mcpServers.hbridge = HBRIDGE_ENTRY;
+  fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
+  console.log("✓ hbridge MCP config updated");
 } catch (e) {
   console.error("⚠ Could not register hbridge in Claude Code MCP config:", e.message);
   console.error("  Add manually: /mcp add hbridge -- hbridge --stdio");
