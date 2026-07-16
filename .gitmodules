@@ -1,0 +1,3 @@
+[submodule "original-claude-code"]
+	path = original-claude-code
+	url = https://github.com/soyou19/Open-ClaudeCode.git
