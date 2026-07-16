@@ -1,37 +1,68 @@
 import { createServer as http } from "http";
+import { Bridge } from "./bridge.mjs";
 
-let taskCount = 0;
-let startTime = Date.now();
+let taskCount = 0, startTime = Date.now();
+let bridge = new Bridge();
 
 export function createServer(users) {
   return http((req, res) => {
-    if (req.url === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
-      return;
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      return res.end();
     }
 
-    // Auth check
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ status: "ok" }));
+    }
+
     const auth = req.headers["authorization"] || "";
     const [username, key] = Buffer.from(auth.split(" ")[1] || "", "base64")
       .toString().split(":");
     
     if (!users.verify(username, key)) {
       res.writeHead(401);
-      res.end("Unauthorized");
-      return;
+      return res.end("Unauthorized");
     }
 
-    if (req.url === "/v1/task/create" && req.method === "POST") {
-      taskCount++;
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ task_id: `task_${taskCount}` }));
-    } else if (req.url === "/v1/task/status" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "done" }));
+    const isPost = req.method === "POST";
+    let body = "";
+    
+    function handle() {
+      try {
+        let result = {};
+        let status = 200;
+        const payload = body ? JSON.parse(body) : {};
+
+        const [_, v, endpoint, action] = req.url.split("/");
+        
+        if (endpoint === "task" && action === "create" && isPost) {
+          taskCount++;
+          result = bridge.createTask(payload.prompt);
+        } else if (endpoint === "task" && action === "output") {
+          const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
+          result = bridge.getTaskOutput(taskId) || { error: "not_found" };
+        } else if (endpoint === "task") {
+          const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
+          result = bridge.getTask(taskId) || { error: "not_found" };
+        } else {
+          status = 404;
+          result = { error: "not_found" };
+        }
+
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+
+    if (isPost) {
+      req.on("data", d => body += d);
+      req.on("end", handle);
     } else {
-      res.writeHead(404);
-      res.end("Not found");
+      handle();
     }
   });
 }
@@ -41,7 +72,6 @@ export function startStatusBar(port) {
     const uptime = Math.floor((Date.now() - startTime) / 60000);
     process.stdout.write(`\r  hbridge: on | port: ${port} | ${taskCount} tasks | ↑ ${uptime}min  `);
   }
-
   render();
   setInterval(render, 5000);
 }
