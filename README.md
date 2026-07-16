@@ -122,35 +122,6 @@ npm install ; npm run build
 node src/hbridge/cli.mjs --help
 ```
 
-## Deploy
-
-### Hermes Config
-
-hbridge stores users in JSON format (`hbridge_users.json`):
-
-```json
-{
-  "xu": {
-    "key": "hb_XxXx-XxXx",
-    "created": 1721000000000
-  }
-}
-```
-
-### Claude Code Config
-
-```json
-// ~/.claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "hermes": {
-      "command": "hermes",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
-```
-
 ## Usage
 
 ### Hermes → Claude Code(Session Control)
