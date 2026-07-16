@@ -27,6 +27,8 @@ Hermes Agent                    hbridge                     Claude Code CLI
 
 hbridge runs as a local HTTP server. Hermes connects via HTTP, hbridge spawns Claude Code.
 
+**hbridge spawns Claude Code** — you don"t load hbridge into Claude. hbridge starts Claude on demand via  when Hermes sends a task.
+
 ## Commands
 
 ```
