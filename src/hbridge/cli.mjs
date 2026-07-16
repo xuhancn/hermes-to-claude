@@ -97,12 +97,38 @@ function cmd_user(action, name) {
     const list = users.list();
     if (Object.keys(list).length === 0) {
       console.log("  No users");
-    } else {
+    } else if (cmd === "--help" || cmd === "-h") { showHelp(); }
+else {
       for (const [n, info] of Object.entries(list)) {
         console.log(`  ${n}  (${new Date(info.created).toISOString().slice(0,10)})`);
       }
     }
   }
+}
+
+function showHelp() {
+  console.log(`
+  hbridge — Hermes Bridge 汉的桥
+
+  COMMANDS:
+    hbridge --enable [-u user]   启动 Bridge + 生成 Key
+    hbridge --disable            关闭 Bridge
+    hbridge --status             查看详细状态
+    hbridge --help               显示此帮助
+
+  USER MANAGEMENT:
+    hbridge --user add [name]    添加用户
+    hbridge --user del <name>    删除用户
+    hbridge --user key <name>    重新生成 Key
+    hbridge --user list          列出所有用户
+
+  EXAMPLES:
+    hbridge --enable             首次启动，输入用户名
+    hbridge --enable xu          以 xu 身份启动
+    hbridge --user add han       添加用户 han
+    hbridge --status             查看谁在连
+  `);
+  process.exit(0);
 }
 
 const args = process.argv.slice(2);
@@ -114,6 +140,7 @@ if (cmd === "--enable") cmd_enable(sub);
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--user") cmd_user(sub, val);
+else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
   console.log("hbridge — Hermes Bridge");
   console.log("  hbridge --enable [-u user]   Start bridge");
