@@ -5,7 +5,7 @@ const os = require("os");
 
 const CONFIG = path.join(process.env.HOME || os.homedir(), ".claude", "claude_desktop_config.json");
 const HBRIDGE_ENTRY = {
-  command: "hbridge",
+  command: path.join(__dirname, "..", "dist", "hbridge.mjs"),
   args: ["--stdio"],
 };
 
