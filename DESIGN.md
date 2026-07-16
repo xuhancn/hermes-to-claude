@@ -1,70 +1,97 @@
-# H-Bridge (hbridge) v1 Design
+# H-Bridge (hbridge) Design
 
-`hbridge` = Hermes Bridge — independent from Claude Code official `/bridge`.
+`hbridge` = Hermes Bridge — local HTTP bridge connecting Hermes Agent to Claude Code.
 
-## User Flow
-
-```
-$ npm install -g hbridge          ← Done. Everything else is in Claude Code.
-
-$ claude
-  ▸ /mcp add hbridge -- hbridge --stdio
-  ✓ hbridge registered
-
-  ▸ /mcp hbridge enable
-  Username: xu
-  ╔══════════════════════════════════╗
-  ║  ⚠ H-Bridge enabled             ║
-  ║  Remote access is now allowed    ║
-  ║  User:   xu                      ║
-  ║  Key:    hb_KxVq-RmZp           ║
-  ║  Addr:   127.0.0.1:9190          ║
-  ║         192.168.27.243:9190     ║
-  ║  Save this key — shown once      ║
-  ╚══════════════════════════════════╝
-
-  ▸ /mcp hbridge status
-  hbridge: on | port: 9190 | 0 tasks | ↑ 2min
-
-  ▸ /mcp hbridge user add han
-  ✓ User: han  Key: hb_YtBn-WcFl
-
-  ▸ /mcp hbridge user list
-  xu     active    Jul 16 14:22
-  han    inactive  never
-
-  ▸ /mcp hbridge disable
-  ✓ hbridge disabled
-```
-
-## Architecture
+## Architecture (current)
 
 ```
-Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code
-  (remote)        转发器            (spawns hbridge as MCP)
-                      │
-               Auth: hb_XxXx-XxXx
-               Users: add/del/key/list
+npm install
+  ├─ preinstall:  npm run build  → dist/hbridge.mjs + dist/statusline.mjs
+  ├─ install:     npm deps
+  └─ postinstall: scripts/setup-mcp.cjs
+       ├─ ~/.claude.json:         mcpServers.hbridge → --stdio MCP
+       └─ ~/.claude/settings.json: statusLine.command → dist/statusline.mjs
+
+Claude Code 启动
+  └─ spawn node dist/hbridge.mjs --stdio (MCP 子进程)
+       │
+       ├─ MCP 工具 (5):
+       │   hbridge_enable / disable / status / user_add / user_list
+       │
+       └─ hbridge_enable → HTTP server on :9190 (同进程)
+            ├─ GET  /health              → {"status":"ok"}
+            ├─ POST /v1/task/create      → spawn Claude --print via stdin
+            ├─ GET  /v1/task/output?id=x → ~/.hbridge_inbox.json result
+            └─ GET  /v1/task?id=x        → task status only
+
+Hermes ──HTTP──▶ :9190 ──▶ bridge._spawn() ──stdin──▶ Claude --print
+                              │                            │
+                              ▼                            ▼
+                        ~/.hbridge_inbox.json        stdout captured
+                        statusLine 更新              写入 inbox
+                        ~/.hbridge_chat.log
 ```
+
+## StatusLine (bottom bar)
+
+Claude Code 原生轮询，~3-5s 刷新一次。
+
+```
+Enabled:  hbridge: on | :9190 | ✅"echo hello" | ✅"fix bug" | 📨"long" | +2 more
+Disabled: hbridge: off
+```
+
+Format A: 最新 3 条任务（名称截 20 字）+ 超出计数。
 
 ## Key Format
 
-`hb_XXXX-XXXX` — 8 chars Base52 (A-Za-z), 45.6 bits.
+`hb_XXXX-XXXX` — 8 chars Base52 (A-Za-z), `crypto.randomBytes()`, ~45.6 bit entropy.
+Stored in `hbridge_users.json` (alongside the bridge).
 
-## MCP Tools
+## Data Flow
 
 ```
-/mcp hbridge enable       Start bridge + generate key
-/mcp hbridge disable      Stop bridge
-/mcp hbridge status       Show status bar
-/mcp hbridge help         Show help
+Hermes POST /v1/task/create {"prompt":"fix bug"}
+  → HTTP server (mcp.mjs, port 9190)
+  → bridge.createTask()
+  → _spawn(id, prompt)
+      → inbox: {id, prompt, status:"running"}
+      → chatLog: ▶ Hermes → Claude: "fix bug"
+      → spawn(npx, ["@anthropic-ai/claude-code", "--print"])
+      → child.stdin.write(prompt) + child.stdin.end()
+      → child.stdout → output captured
+      → close → inbox: {status:"done", result:"...", exitCode:0}
+      → chatLog: ✅ Claude → Hermes: exit:0 "..."
+      → statusLine ~3s: ✅"fix bug"
 
-/mcp hbridge user add     Add user
-/mcp hbridge user del     Delete user
-/mcp hbridge user key     Regenerate key
-/mcp hbridge user list    List all users
+Hermes GET /v1/task/output?task_id=xxx
+  → return {retrieval_status:"success", task:{result, exitCode}}
 ```
+
+## Files
+
+### Runtime state (gitignored, ~/ 跨 CWD 安全)
+| File | Purpose |
+|------|---------|
+| `~/.hbridge_state.json` | Server running/stopped + port + users + task count |
+| `~/.hbridge_inbox.json` | Task list (max 20) with status, result, exitCode |
+| `~/.hbridge_chat.log` | Human-readable conversation log (tail -f) |
+| `~/.hbridge_liveness.json` | Liveness failure counter (3-failure debounce) |
+
+### Config (written by postinstall)
+| File | Purpose |
+|------|---------|
+| `~/.claude.json` | MCP server entry (mcpServers.hbridge) |
+| `~/.claude/settings.json` | StatusLine command (highest priority) |
+
+## Cross-Platform
+
+| Platform | Spawn | Status |
+|----------|-------|--------|
+| Linux | `npx @anthropic-ai/claude-code --print` | ✅ |
+| Windows | `cmd.exe /d /s /c npx.cmd ... --print` | ✅ |
+| macOS | `npx @anthropic-ai/claude-code --print` | ✅ (same as Linux) |
 
 ## Open Source
 
-Target: MIT — when stable.
+MIT — when stable.

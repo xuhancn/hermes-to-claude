@@ -5,26 +5,39 @@ description: Verify that hbridge installs and runs correctly on the current plat
 
 # Dev Deploy Verify
 
-Verify that hbridge can be deployed from a fresh clone through to a running HTTP service. Run on Windows first, then Linux and macOS.
+Verify hbridge from fresh clone to running HTTP + MCP service across Windows, Linux, macOS.
 
-## Process
+## Architecture (current)
 
-1. **Detect platform** via `process.platform` or `os.platform()`: `win32`, `linux`, `darwin`
-2. **Read platform steps** from `references/{platform}-steps.md`
-3. **Execute each step in sequence** — each step runs as a bash command with verification
-4. **On failure**: Stop, report the error, root-cause, and fix — then retry from the failed step
-5. **On all-pass**: Report success and offer to update README.md
+```
+npm install
+  → preinstall: npm run build → dist/hbridge.mjs + dist/statusline.mjs
+  → postinstall: scripts/setup-mcp.cjs
+      → ~/.claude.json:  mcpServers.hbridge (5 MCP tools)
+      → ~/.claude/settings.json:  statusLine.command (bottom bar)
+
+Claude Code 启动时:
+  → spawn node dist/hbridge.mjs --stdio (MCP 子进程)
+  → hbridge_enable → HTTP server on :9190 (同进程内)
+      → POST /v1/task/create → bridge._spawn() → stdin → Claude --print
+      → 结果写入 ~/.hbridge_inbox.json
+      → statusLine ~3s 刷新: hbridge: on | :9190 | ✅"task" | ✅"task2" | +N more
+      → ~/.hbridge_chat.log 实时日志 (tail -f)
+```
 
 ## Cross-platform notes
 
-- Windows: `where` for command lookup, `curl` (PowerShell or native), admin terminal may be needed for `npm install -g`
-- Linux/macOS: `which` for command lookup, `curl` for HTTP, `sudo npm install -g .` for global install
-- The `preinstall` hook (`npm run build`) and `postinstall` hook (`scripts/setup-mcp.cjs`) run automatically on `npm install`
-- If `--ignore-scripts` was used, guide user to run `npm run build && node scripts/setup-mcp.cjs` manually
+- Windows: `where` for command lookup, `cmd.exe /d /s /c` for npx.cmd spawn
+- Linux/macOS: `which` for command lookup, direct npx spawn
+- MCP + HTTP 同进程，不需要额外端口配置
+- StatusLine 自动注册，不需要手动 setup
 
 ## Manual configuration path
 
-When the automatic hooks fail or are skipped:
-1. Build manually: `npm run build`
-2. Register MCP manually: Add to `~/.claude.json` or use `/mcp add hbridge -- node dist/hbridge.mjs --stdio`
-3. Verify with: `node dist/hbridge.mjs --stdio` then test with `/mcp list` in Claude Code
+When postinstall fails or `--ignore-scripts` was used:
+1. Build: `npm run build`
+2. Register MCP: `/mcp add hbridge -- node dist/hbridge.mjs --stdio`
+3. StatusLine may not auto-register. Add to `~/.claude/settings.json`:
+   ```json
+   {"statusLine": {"type": "command", "command": "node /path/to/dist/statusline.mjs"}}
+   ```
