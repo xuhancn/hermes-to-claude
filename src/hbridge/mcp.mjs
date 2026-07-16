@@ -37,18 +37,18 @@ function handleMcp(msg, users, bridge) {
     const { name, arguments: args = {} } = params;
     let t = "";
     if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); const srv = http.createServer((req, res) => {
-    if (req.url === "/health") { res.writeHead(200, {"Content-Type":"application/json"}).end(JSON.stringify({status:"ok"})); return; }
+    if (req.url === "/health") { res.writeHead(200, {"Content-Type":"application/json"}); res.end(JSON.stringify({status:"ok"})); return; }
     if (req.method === "POST" && req.url === "/v1/task/create") {
       let b = ""; req.on("data", d => b += d);
       req.on("end", () => {
         let prompt = "";
         try { prompt = JSON.parse(b).prompt; } catch(e) { prompt = b; }
         log("\n[Hermes Task] " + prompt + "\n");
-        res.writeHead(200, {"Content-Type":"application/json"}).end(JSON.stringify({task_id:"inbox_"+Date.now(),status:"submitted"}));
+        res.writeHead(200, {"Content-Type":"application/json"}); res.end(JSON.stringify({task_id:"inbox_"+Date.now(),status:"submitted"}));
       });
       return;
     }
-    res.writeHead(404, {"Content-Type":"application/json"}).end(JSON.stringify({error:"not_found"}));
+    res.writeHead(404, {"Content-Type":"application/json"}); res.end(JSON.stringify({error:"not_found"}));
   });
   srv.listen(9190); }
     else if (name === "hbridge_disable") t = "disabled";
