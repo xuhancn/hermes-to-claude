@@ -9,7 +9,9 @@
     "start": "node src/bridge.js",
     "test": "echo 'ok'",
     "build": "node build.mjs",
-    "postinstall": "node scripts/setup-mcp.cjs"
+    "postinstall": "node scripts/setup-mcp.cjs",
+    "prepublishOnly": "npm run build",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
