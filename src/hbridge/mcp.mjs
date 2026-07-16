@@ -87,6 +87,13 @@ function startInboxServer(users, bridge) {
 
   inboxServer = http.createServer((req, res) => {
     try {
+      // Health check — no auth required (used by statusline liveness)
+      if (req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok" }));
+        return;
+      }
+
       // Auth
       const auth = req.headers["authorization"] || "";
       const b64 = auth.split(" ")[1] || "";
@@ -101,12 +108,6 @@ function startInboxServer(users, bridge) {
 
       const [_, v, endpoint, actionRaw] = req.url.split("/");
       const action = actionRaw ? actionRaw.split("?")[0] : "";
-
-      if (req.url === "/health" || (endpoint === "health")) {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
-        return;
-      }
 
       if (endpoint === "task" && action === "create" && req.method === "POST") {
         let body = "";
