@@ -20,25 +20,10 @@
  *   hbridge: on | :9190 | 1 pending
  */
 
-import { readState, writeState } from "./state.mjs";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { readState, writeState, readInbox } from "./state.mjs";
 import http from "http";
 
-const INBOX_FILE = join(homedir(), ".hbridge_inbox.json");
 const LIVENESS_TIMEOUT = 500; // ms — must be snappy for status bar
-
-function pendingCount() {
-  if (!existsSync(INBOX_FILE)) return 0;
-  try {
-    const inbox = JSON.parse(readFileSync(INBOX_FILE, "utf8"));
-    if (!Array.isArray(inbox)) return 0;
-    return inbox.filter((t) => t.status === "pending").length;
-  } catch {
-    return 0;
-  }
-}
 
 /** Quick health check — resolves true only if server responds 200. */
 function livenessCheck(port) {
@@ -80,12 +65,17 @@ async function main() {
     return;
   }
 
-  // Server is alive — show full status
-  const parts = [`hbridge: on`, `:${state.port}`];
+  // Server is alive — show task summary from inbox
+  const inbox = readInbox().filter((t) => t.id); // only real tasks
+  const total = inbox.length;
+  const running = inbox.filter((t) => t.status === "running").length;
+  const done = inbox.filter((t) => t.status === "done").length;
 
-  const pending = pendingCount();
-  if (pending > 0) {
-    parts.push(`${pending} pending`);
+  const parts = [`hbridge: on`, `:${state.port}`];
+  if (total > 0) {
+    parts.push(`${total} tasks`);
+    if (running > 0) parts.push(`${running} running`);
+    else parts.push(`${done} done`);
   }
 
   console.log(parts.join(" | "));
