@@ -36,7 +36,8 @@ export function createServer(users) {
         let status = 200;
         const payload = body ? JSON.parse(body) : {};
 
-        const [_, v, endpoint, action] = req.url.split("/");
+        const [_, v, endpoint, actionRaw] = req.url.split("/");
+        const action = actionRaw ? actionRaw.split("?")[0] : undefined;
         
         if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;

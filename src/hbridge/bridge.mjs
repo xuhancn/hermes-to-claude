@@ -20,14 +20,26 @@ export class Bridge {
       created: Date.now(),
     };
     this.tasks.set(id, task);
-    return { task_id: id, status: "created" };
 
-    // Spawn Claude Code
-    const child = spawn("npx", ["@anthropic-ai/claude-code", "-p", prompt], {
-      cwd: process.cwd(),
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
-    });
+    // Spawn Claude Code (async, updates task when done)
+    this._spawn(id, prompt);
+    return { task_id: id, status: "created" };
+  }
+
+  _spawn(id, prompt) {
+    const task = this.tasks.get(id);
+    if (!task) return;
+    const isWin = process.platform === "win32";
+    const child = spawn(
+      isWin ? "npx.cmd" : "npx",
+      ["@anthropic-ai/claude-code", "-p", prompt],
+      {
+        cwd: process.cwd(),
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env },
+        shell: isWin,
+      }
+    );
 
     let output = "";
     child.stdout.on("data", (d) => {
