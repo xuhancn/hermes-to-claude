@@ -1,6 +1,8 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /**
  * Bridge — persistent Claude Code process manager.
  *
@@ -20,18 +22,33 @@ const CLAUDE_ARGS = [
   "--output-format", "stream-json",
 ];
 
+const MAX_RESTARTS = 3;
+const RESTART_DELAY_MS = 2000;
+
 export class Bridge {
   constructor() {
     this.child = null;
     this.busy = false;
-    this.currentTask = null;  // {id, prompt, status, result, exitCode}
-    this._results = new Map(); // in-memory task results for /task/output
-    this._taskResolve = null;  // resolve() for the current task promise
-    this._startClaude();
+    this.currentTask = null;
+    this._results = new Map();
+    this._taskResolve = null;
+    this._starting = false;      // guard: prevent concurrent spawns
+    this._ready = false;         // true when child process is accepting input
+    this._restarts = 0;          // consecutive restart count
+    // Lazy — no _startClaude here. Spawn happens on first createTask.
   }
 
-  _startClaude() {
-    if (this.child) return;
+  async _startClaude() {
+    if (this.child && !this.child.killed) return;
+    if (this._starting) {
+      // Another createTask is already spawning — wait for it
+      while (this._starting) await sleep(200);
+      return;
+    }
+
+    this._starting = true;
+    this._ready = false;
+
     const isWin = process.platform === "win32";
     const cmd = isWin ? "cmd.exe" : "npx";
     const args = isWin ? ["/d", "/s", "/c", `npx.cmd ${CLAUDE_ARGS.join(" ")}`] : CLAUDE_ARGS;
@@ -41,23 +58,38 @@ export class Bridge {
       env: { ...process.env },
     });
 
-    this.child.on("error", (err) => {
-      this._failTask(`spawn error: ${err.message}`);
-      this.child = null;
-    });
-
-    this.child.on("close", () => {
-      this._failTask("process exited unexpectedly");
-      this.child = null;
-    });
-
+    // Parse NDJSON from stdout — first line signals readiness
     const rl = createInterface({ input: this.child.stdout });
     rl.on("line", (line) => {
       try {
         const msg = JSON.parse(line);
+        if (!this._ready) this._ready = true; // first output = process is live
         this._onMessage(msg);
       } catch {}
     });
+
+    this.child.on("error", (err) => {
+      this._failTask(`spawn error: ${err.message}`);
+      // Do NOT set child = null — prevents infinite respawn
+      // _restarts counter handles exhaustion
+    });
+
+    this.child.on("close", () => {
+      this._failTask("process exited unexpectedly");
+      // Same: don't null child, _restarts handles it
+    });
+
+    // Wait for the process to be ready (stdin writable + first output)
+    await Promise.race([
+      new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (this._ready) { clearInterval(check); resolve(); }
+        }, 50);
+      }),
+      sleep(5000), // timeout: give up after 5s
+    ]);
+
+    this._starting = false;
   }
 
   _onMessage(msg) {
@@ -83,10 +115,9 @@ export class Bridge {
 
   _finishTask(exitCode) {
     if (!this.currentTask) return;
-    const t = this.currentTask;
-    t.status = "done";
-    t.exitCode = exitCode;
-    this._results.set(t.id, { ...t });
+    this.currentTask.status = "done";
+    this.currentTask.exitCode = exitCode;
+    this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
     this.currentTask = null;
     if (this._taskResolve) {
@@ -97,10 +128,9 @@ export class Bridge {
 
   _failTask(reason) {
     if (!this.currentTask) return;
-    const t = this.currentTask;
-    t.status = "failed";
-    t.result = reason;
-    this._results.set(t.id, { ...t });
+    this.currentTask.status = "failed";
+    this.currentTask.result = reason;
+    this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
     this.currentTask = null;
     if (this._taskResolve) {
@@ -112,8 +142,20 @@ export class Bridge {
   async createTask(prompt) {
     const id = `task_${Date.now()}`;
 
+    // Guard: if the child keeps dying, stop after MAX_RESTARTS
+    if (this.child && this.child.killed) {
+      this._restarts++;
+      if (this._restarts > MAX_RESTARTS) {
+        this._restarts = 0;
+        throw new Error(`Claude process crashed ${MAX_RESTARTS}+ times, giving up`);
+      }
+    } else if (!this.child) {
+      this._restarts = 0;
+    }
+
+    // Ensure Claude is running (await spawn + readiness)
     if (!this.child || this.child.killed) {
-      this._startClaude();
+      await this._startClaude();
     }
 
     // Queue: wait for previous task to finish

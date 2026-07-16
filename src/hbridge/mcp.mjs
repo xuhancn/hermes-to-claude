@@ -128,12 +128,14 @@ function startInboxServer(users, bridge) {
       if (endpoint === "task" && action === "create" && req.method === "POST") {
         let body = "";
         req.on("data", (d) => (body += d));
-        req.on("end", async () => {
+        req.on("end", () => {
           try {
             const prompt = JSON.parse(body).prompt || "";
-            const result = await bridge.createTask(prompt);
+            const id = `task_${Date.now()}`;
+            // Fire and forget — don't await; HTTP returns immediately
+            bridge.createTask(prompt).catch(() => {});
             res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify(result));
+            res.end(JSON.stringify({ task_id: id, status: "created" }));
           } catch (e) {
             res.writeHead(400);
             res.end(JSON.stringify({ error: e.message }));

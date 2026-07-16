@@ -1,5 +1,5 @@
+// Test Bridge class — getTask / getTaskOutput (no Claude spawn)
 import { Bridge } from "../src/hbridge/bridge.mjs";
-import { rmSync } from "fs";
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -7,23 +7,37 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-rmSync("hbridge_tasks", { recursive: true, force: true });
 const b = new Bridge();
 
-const r = await b.createTask("echo hello");
-assert(r && r.task_id && r.task_id.startsWith("task_"), "task_id returned");
-assert(r.status === "created", "status created");
+// Bridge starts with no child (lazy spawn)
+assert(b.child === null, "no child on init");
+assert(b.busy === false, "not busy on init");
 
-const t = b.getTask(r.task_id);
-assert(t && t.id === r.task_id, "getTask returns task");
+// Manually insert a task into _results to test getTask/getTaskOutput
+const taskId = "task_test_001";
+b._results.set(taskId, { id: taskId, prompt: "test", status: "done", result: "hello world", exitCode: 0 });
 
-const o = b.getTaskOutput(r.task_id);
-assert(o.retrieval_status, "output has retrieval_status");
+const t = b.getTask(taskId);
+assert(t !== null, "getTask returns task");
+assert(t.id === taskId, "getTask id");
+assert(t.status === "done", "getTask status");
 
-// Second task — may have same timestamp in fast tests, that is fine
-const r2 = await b.createTask("echo world");
-assert(r2.task_id !== r.task_id || r.task_id === r2.task_id, "second task created");
+const o = b.getTaskOutput(taskId);
+assert(o !== null, "getTaskOutput returns");
+assert(o.retrieval_status === "success", "getTaskOutput success");
+assert(o.task.result === "hello world", "getTaskOutput result");
 
-rmSync("hbridge_tasks", { recursive: true, force: true });
+// Pending task
+const pId = "task_test_pending";
+b._results.set(pId, { id: pId, prompt: "pending", status: "running", result: "", exitCode: null });
+
+const p = b.getTaskOutput(pId);
+assert(p.retrieval_status === "pending", "pending retrieval_status");
+assert(p.task.status === "running", "pending status");
+
+// Non-existent task
+assert(b.getTask("nonexistent") === null, "nonexistent task null");
+assert(b.getTaskOutput("nonexistent") === null, "nonexistent output null");
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
