@@ -30,7 +30,7 @@ export function createServer(users) {
     const isPost = req.method === "POST";
     let body = "";
     
-    function handle() {
+    async function handle() {
       try {
         let result = {};
         let status = 200;
@@ -40,7 +40,7 @@ export function createServer(users) {
         
         if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;
-          result = bridge.createTask(payload.prompt);
+          result = await (async () => bridge.createTask(payload.prompt))();
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
           result = bridge.getTaskOutput(taskId) || { error: "not_found" };

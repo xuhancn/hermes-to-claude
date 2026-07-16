@@ -20,6 +20,7 @@ export class Bridge {
       created: Date.now(),
     };
     this.tasks.set(id, task);
+    return { task_id: id, status: "created" };
 
     // Spawn Claude Code
     const child = spawn("npx", ["@anthropic-ai/claude-code", "-p", prompt], {

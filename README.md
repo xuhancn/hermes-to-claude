@@ -2,64 +2,83 @@
 
 > Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
 
-本地 JSON-RPC 桥接，让 Hermes Agent 与 Claude Code 双向互通——不依赖 Anthropic Pro/Max 订阅。
+Local JSON-RPC bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required.
 
-## 设计
+## Why hbridge
 
-### 本地模式 (stdio)
+- **Leverages Claude Code built-in security** — Auto Mode protects your filesystem
+- **Simpler than SSH** — no key pairs, no authorized_keys
+- **Zero external API** — local-only, no subscription
+- **Independent auth** — hb_ keys, not OS accounts
+- **Default-off** — no attack surface when disabled
 
-Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdin/stdout 传输 JSON-RPC 消息：
-
-```
-Hermes Agent                    Claude Code CLI
-    │                                │
-    │  JSON-RPC over stdin/stdout    │
-    │←─────────────────────────────→│
-    │                                │
-  methods:                          内部:
-  - task.create                   - 读写文件
-  - task.status                   - 执行命令
-  - task.stop                     - Git操作
-```
-
-### 远程模式 (HTTP + SSH Tunnel)
-
-Bridge 以 HTTP 服务形式运行在某台机器上，另一台机器上的 Hermes 通过 SSH 隧道调用：
+### Architecture
 
 ```
-┌─── Hermes 宿主机 (Mac) ────────────┐
+Hermes Agent                    hbridge                     Claude Code CLI
+       │                            │                              │
+       │──── HTTP ────────────────▶│                              │
+       │      Auth: hb_XxXx-XxXx   │                              │
+       │                            │──── spawn ─────────────────▶│
+       │                            │                              │
+       │      TaskCreate ──────────▶│──── prompt ────────────────▶│
+       │◀──── TaskOutput ──────────│◀─── result ─────────────────│
+```
+
+hbridge runs as a local HTTP server. Hermes connects via HTTP, hbridge spawns Claude Code.
+
+## Commands
+
+```
+hbridge --enable [-u user]    Start bridge + generate key
+hbridge --disable             Stop bridge
+hbridge --status              Show detailed status
+hbridge --help                Show this help
+
+hbridge --user add [name]     Add user
+hbridge --user del <name>     Delete user
+hbridge --user key <name>     Regenerate key
+hbridge --user list           List all users
+```
+
+### Remote Mode (HTTP + SSH Tunnel)
+
+Bridge runs as HTTP service on one machine, Hermes connects via SSH tunnel from another：
+
+```
+┌─── Hermes Host (Mac/Linux) ────────────┐
 │                                     │
 │  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
 │       ▲                            │
 │       │                            │ SSH tunnel
-│   Telegram 网关                     │
+│   Telegram Gateway                     │
 └───────┼────────────────────────────┼───┘
         │                            │
-   手机指令                   ┌──────▼──────────┐
-                             │ Claude 宿主机      │
-                             │ (Windows)          │
+   Mobile                   ┌──────▼──────────┐
+                             │ Claude Host      │
+                             │ (Windows/Linux)          │
                              └───────────────────┘
 ```
 
 On the Mac:
 ```bash
-node dist/bridge.mjs --http :9090
+node src/hbridge/cli.mjs --enable
 ```
 On the remote machine:
 ```bash
 ssh -L 9090:localhost:9090 mac-mini
 ```
-Hermes 侧配置指向 `localhost:9090` 即可。
+Point Hermes config to localhost:9190.
 
-## 依赖
+## Dependencies
 
-- **Node.js ≥ 20**（推荐 22 LTS）
-- **Claude Code CLI**（`npx @anthropic-ai/claude-code`，cc-switch 可用）
-- **Hermes Agent** 任意版本
+- **Node.js ≥ 20**(22 LTS recommended)
+- **Claude Code CLI**(npx @anthropic-ai/claude-code, cc-switch compatible)
+- **Hermes Agent** any version
 
-## 编译（所有平台）
+## Build (All Platforms)
 
-本项目纯 TypeScript，编译为单文件可执行脚本：
+TypeScript project, builds to a single executable:
 
 ```bash
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
@@ -68,21 +87,21 @@ npm install
 npm run build          # → dist/bridge.mjs
 ```
 
-## 安装
+## Install
 
 ### Linux
 
 ```bash
-# 1. 装 Node.js
+# 1. Install Node.js
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# 2. 克隆 + 编译
+# 2. Clone + build
 git clone <repo> && cd hermes-claude-bridge
 npm install && npm run build
 
-# 3. 验证
-node dist/bridge.mjs --help
+# 3. Verify
+node src/hbridge/cli.mjs --help
 ```
 
 ### macOS
@@ -91,7 +110,7 @@ node dist/bridge.mjs --help
 brew install node@22
 git clone <repo> && cd hermes-claude-bridge
 npm install && npm run build
-node dist/bridge.mjs --help
+node src/hbridge/cli.mjs --help
 ```
 
 ### Windows
@@ -100,41 +119,12 @@ node dist/bridge.mjs --help
 winget install OpenJS.NodeJS.LTS
 git clone <repo> ; cd hermes-claude-bridge
 npm install ; npm run build
-node dist/bridge.mjs --help
+node src/hbridge/cli.mjs --help
 ```
 
-## 部署
+## Usage
 
-### Hermes 侧配置
-
-在 `~/.hermes/config.yaml` 添加：
-
-```yaml
-mcp_servers:
-  claude_code:
-    command: "node"
-    args: ["/path/to/hermes-claude-bridge/dist/bridge.mjs"]
-    env:
-      CLAUDE_PROJECT_ROOT: "/home/xu/projects/StockMan"
-```
-
-### Claude Code 侧配置
-
-```json
-// ~/.claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "hermes": {
-      "command": "hermes",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
-```
-
-## 使用
-
-### Hermes → Claude Code（会话控制）
+### Hermes → Claude Code(Session Control)
 
 ```
 /hermes task-create "修复 StockMan ReducePosPolicy bug"
@@ -142,17 +132,28 @@ mcp_servers:
 /hermes task-stop
 ```
 
-### Claude Code → Hermes（自动化）
+### Claude Code → Hermes(Automation)
 
-Claude 可调 Hermes cron、发送 Telegram 通知、触发盘前扫描。
+Claude can trigger Hermes cron, Telegram notifications, pre-market scans.
 
-## 协议
+## Protocol
 
-基于 JSON-RPC 2.0 over stdio：
+JSON-RPC 2.0 over HTTP:
 
 ```json
 {"jsonrpc":"2.0","method":"task/create","params":{"prompt":"..."},"id":1}
 {"jsonrpc":"2.0","result":{"sessionId":"cse_xxx"},"id":1}
+```
+
+## Tests
+
+```
+node tests/test_users.mjs     307/307
+node tests/test_cli.mjs       8/8
+node tests/test_server.mjs    3/3
+node tests/test_bridge.mjs    6/6
+node tests/test_http.mjs      4/4
+Total: 328 tests
 ```
 
 ## License
