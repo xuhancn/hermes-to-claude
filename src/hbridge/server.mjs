@@ -20,9 +20,11 @@ export function createServer(users) {
     const [username, key] = Buffer.from(auth.split(" ")[1] || "", "base64")
       .toString().split(":");
     
-    if (!users.verify(username, key)) {
-      res.writeHead(401);
-      return res.end("Unauthorized");
+    const ok = users.verify(username, key);
+      console.error(`AUTH: user=${username} key=${key} ok=${ok}`);
+      if (!ok) {
+        res.writeHead(401);
+        return res.end("Unauthorized");
     }
 
     const isPost = req.method === "POST";
