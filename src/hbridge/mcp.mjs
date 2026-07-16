@@ -5,6 +5,14 @@ import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readInbox } from "./state.mjs";
 
 export function startMcpServer() {
+  // Global crash protection — keep MCP alive even if something slips through
+  process.on("uncaughtException", (err) => {
+    process.stderr.write(`[hbridge] UNCAUGHT: ${err.message}\n`);
+  });
+  process.on("unhandledRejection", (err) => {
+    process.stderr.write(`[hbridge] UNHANDLED: ${err}\n`);
+  });
+
   const users = new UserManager();
   const bridge = new Bridge();
   let buf = "";
@@ -27,6 +35,9 @@ export function startMcpServer() {
       }
     }
   });
+
+  // Health-check keepalive — respond instantly without creating a full request
+  process.stdin.on("data", () => {});
 }
 
 function handleMcp(msg, users, bridge) {
@@ -46,7 +57,8 @@ function handleMcp(msg, users, bridge) {
   } else if (method === "tools/list") {
     respond({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
   } else if (method === "tools/call") {
-    const { name, arguments: args = {} } = params;
+    try {
+      const { name, arguments: args = {} } = params;
     // Drain pending Hermes notifications into every tool response
     const notif = drainNotifications();
     let t = notif;
@@ -76,6 +88,13 @@ function handleMcp(msg, users, bridge) {
       id,
       result: { content: [{ type: "text", text: t }] },
     });
+    } catch (e) {
+      respond({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32603, message: `hbridge error: ${e.message}` },
+      });
+    }
   }
 }
 
