@@ -22,10 +22,12 @@ function handleMcp(msg, users, bridge) {
   const { method, params, id } = msg;
   if (method === "initialize") respond({ jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "hbridge", version: "1.0.0" } } });
   else if (method === "tools/list") respond({ jsonrpc: "2.0", id, result: { tools: [
-  { name: "hbridge_enable", description: "Start hbridge server and generate access key" },
-  { name: "hbridge_disable", description: "Stop hbridge server" },
-  { name: "hbridge_status", description: "Show hbridge server status and connected users" },
+  { name: "hbridge_enable", description: "Start hbridge server and generate access key", inputSchema: { type: "object", properties: { user: { type: "string" } } } },
+  { name: "hbridge_disable", description: "Stop hbridge server", inputSchema: { type: "object", properties: {} } },
+  { name: "hbridge_status", description: "Show hbridge server status and connected users", inputSchema: { type: "object", properties: {} } },
   { name: "hbridge_user_add", description: "Add a new user to hbridge", inputSchema: { type: "object", properties: { name: { type: "string", description: "Username to add" } }, required: ["name"] } },
+  { name: "hbridge_user_list", description: "List all registered users", inputSchema: { type: "object", properties: {} } }
+] } },
   { name: "hbridge_user_list", description: "List all registered users" }
 ] } });
   else if (method === "tools/call") {
