@@ -75,25 +75,41 @@ Point Hermes config to localhost:9190.
 
 ## Developer Flow
 
+### 1. Install Node.js
+
+**Linux**
 ```bash
-# 1. Clone
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+**macOS**
+```bash
+brew install node@22
+```
+
+**Windows**
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+### 2. Clone + Build + Install
+
+```bash
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
-
-# 2. Build
 npm install
 npm run build
+npm install -g .             # → hbridge command available
+```
 
-# 3. Install globally
-npm install -g .
+### 3. Verify
 
-# 4. Verify
+```bash
 hbridge --help
 ```
 
 That is it. Open Claude Code and use `/mcp hbridge enable`.
-
-
 ## Usage
 
 > See [HERMES.md](HERMES.md) for the Hermes Agent integration guide.
