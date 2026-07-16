@@ -34,10 +34,10 @@ function handleMcp(msg, users, bridge) {
   else if (method === "tools/call") {
     const { name, arguments: args = {} } = params;
     let t = "";
-    if (name === "hbridge_enable") { const u = users.list(); t = u[args.user || "bridge"] ? u[args.user || "bridge"].key : users.add(args.user || "bridge"); }
+    if (name === "hbridge_enable") { const uname = args.user || "bridge"; const u = users.list(); t = u[uname] ? u[uname].key : users.add(uname); }
     else if (name === "hbridge_disable") t = "disabled";
-    else if (name === "hbridge_status") t = JSON.stringify({ running: true, users: Object.keys(users.list()) });
-    else if (name === "hbridge_user_add") { t = users.add(args.name); }
+    else if (name === "hbridge_status") t = JSON.stringify({ running: true, port: 9190, users: Object.keys(users.list()), tasks: bridge.tasks ? bridge.tasks.size : 0 });
+    else if (name === "hbridge_user_add") { const ex = users.list(); t = ex[args.name] ? ex[args.name].key : users.add(args.name); }
     else if (name === "hbridge_user_list") { t = JSON.stringify(users.list()); }
     respond({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: t }] }});
   }
