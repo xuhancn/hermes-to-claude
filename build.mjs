@@ -162,6 +162,15 @@ await esbuild.build({
   }],
 })
 
+// Build statusline script
+await esbuild.build({
+  entryPoints: [path.join(SRC_DIR, 'hbridge', 'statusline.mjs')],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  outfile: 'dist/statusline.mjs',
+});
+
 // Build hbridge CLI
 await esbuild.build({
   entryPoints: [path.join(SRC_DIR, 'hbridge', 'cli.mjs')],
