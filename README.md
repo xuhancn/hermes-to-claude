@@ -15,19 +15,14 @@ Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscrip
 ### Architecture
 
 ```
-Hermes Agent                    hbridge                     Claude Code CLI
-       │                            │                              │
-       │──── HTTP ────────────────▶│                              │
-       │      Auth: hb_XxXx-XxXx   │                              │
-       │                            │──── spawn ─────────────────▶│
-       │                            │                              │
-       │      TaskCreate ──────────▶│──── prompt ────────────────▶│
-       │◀──── TaskOutput ──────────│◀─── result ─────────────────│
+Hermes ──HTTP──▶ hbridge:9190 ──stdio(MCP)──▶ Claude Code
+  (remote)        转发器            (auto-registered via npm)
+                      │
+               hb_XxXx-XxXx
+               npm install -g → postinstall → ✓
 ```
 
-hbridge runs as a local HTTP server. Hermes connects via HTTP, hbridge spawns Claude Code.
-
-**hbridge spawns Claude Code** — you don't load hbridge into Claude. hbridge starts Claude on demand via  when Hermes sends a task.
+hbridge auto-registers as a Claude Code MCP server on install. All interaction is through Claude Code.
 
 ## Commands
 
