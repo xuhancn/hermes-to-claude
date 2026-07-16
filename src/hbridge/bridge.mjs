@@ -26,6 +26,7 @@ const CLAUDE_ARGS = [
 
 const MAX_RESTARTS = 3;
 const RESTART_DELAY_MS = 2000;
+const TASK_TIMEOUT_MS = 300_000; // 5 min — kill stuck tasks
 
 export class Bridge {
   constructor() {
@@ -60,25 +61,29 @@ export class Bridge {
       env: { ...process.env },
     });
 
-    // Parse NDJSON from stdout — first line signals readiness
+    // Forward stderr to debug (appears in Claude Code's MCP server log)
+    this.child.stderr.on("data", (d) => {
+      process.stderr.write(`[claude] ${d.toString()}`);
+    });
+
+    // Parse NDJSON from stdout
     const rl = createInterface({ input: this.child.stdout });
     rl.on("line", (line) => {
       try {
         const msg = JSON.parse(line);
-        if (!this._ready) this._ready = true; // first output = process is live
+        if (!this._ready) this._ready = true;
         this._onMessage(msg);
       } catch {}
     });
 
     this.child.on("error", (err) => {
+      process.stderr.write(`[bridge] spawn error: ${err.message}\n`);
       this._failTask(`spawn error: ${err.message}`);
-      // Do NOT set child = null — prevents infinite respawn
-      // _restarts counter handles exhaustion
     });
 
     this.child.on("close", () => {
-      this._failTask("process exited unexpectedly");
-      // Same: don't null child, _restarts handles it
+      process.stderr.write(`[bridge] Claude process exited\n`);
+      this._failTask("Claude process exited");
     });
 
     // Wait for the process to be ready (stdin writable + first output)
@@ -184,8 +189,16 @@ export class Bridge {
     const msg = JSON.stringify({ type: "user", message: { content: prompt } }) + "\n";
     this.child.stdin.write(msg);
 
-    // Wait for result NDJSON
-    await taskDone;
+    // Wait for result NDJSON (with timeout to prevent queue deadlock)
+    const winner = await Promise.race([
+      taskDone,
+      sleep(TASK_TIMEOUT_MS).then(() => "timeout"),
+    ]);
+
+    if (winner === "timeout") {
+      process.stderr.write(`[bridge] Task ${id} timed out after ${TASK_TIMEOUT_MS / 1000}s\n`);
+      this._failTask("timeout");
+    }
 
     return { task_id: id, status: "created" };
   }
