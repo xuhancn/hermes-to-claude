@@ -48,7 +48,7 @@ $ hbridge --enable
   ║  Save this key — shown once      ║
   ╚══════════════════════════════════╝
 
-  hbridge: on/off | port: 9190 | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
+  hbridge: on | port: 9190 | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
 ```
 
 ## Key Format
