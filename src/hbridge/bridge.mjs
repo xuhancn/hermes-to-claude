@@ -110,6 +110,7 @@ export class Bridge {
   }
 
   _onMessage(msg) {
+    process.stderr.write(`[bridge:msg] type=${msg.type} subtype=${msg.subtype || "-"} task=${!!this.currentTask}\n`);
     if (!this.currentTask) return;
 
     switch (msg.type) {
@@ -125,6 +126,8 @@ export class Bridge {
       case "result":
         if (msg.subtype === "success") {
           this._finishTask(0);
+        } else {
+          process.stderr.write(`[bridge] unexpected result subtype: ${msg.subtype}\n`);
         }
         break;
     }
