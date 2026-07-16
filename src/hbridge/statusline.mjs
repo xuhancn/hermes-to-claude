@@ -21,9 +21,25 @@
  */
 
 import { readState, writeState, readInbox } from "./state.mjs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import http from "http";
 
-const LIVENESS_TIMEOUT = 500; // ms — must be snappy for status bar
+const LIVENESS_TIMEOUT = 500;
+const LIVENESS_FILE = join(homedir(), ".hbridge_liveness.json");
+
+// Track consecutive failures — only reset state after 3 failures in a row.
+// This prevents a brief port conflict (EADDRINUSE recovery) from flipping
+// the status bar to "off" and clearing the task count.
+function readFailCount() {
+  if (!existsSync(LIVENESS_FILE)) return 0;
+  try { return JSON.parse(readFileSync(LIVENESS_FILE, "utf8")).failures || 0; }
+  catch { return 0; }
+}
+function writeFailCount(n) {
+  writeFileSync(LIVENESS_FILE, JSON.stringify({ failures: n }));
+}
 
 /** Quick health check — resolves true only if server responds 200. */
 function livenessCheck(port) {
@@ -59,11 +75,21 @@ async function main() {
   // State says on — confirm liveness (stale state after Claude restart)
   const alive = await livenessCheck(state.port);
   if (!alive) {
-    // Server gone — reset state so next poll is fast
-    writeState({ running: false, tasks: 0 });
-    console.log("hbridge: off");
+    const failures = readFailCount() + 1;
+    if (failures >= 3) {
+      // 3 consecutive failures — server is really gone
+      writeFailCount(0);
+      writeState({ running: false, tasks: 0 });
+      console.log("hbridge: off");
+    } else {
+      writeFailCount(failures);
+      // Still show "off" but don't reset state yet
+      console.log("hbridge: off");
+    }
     return;
   }
+  // Liveness OK — reset failure counter
+  if (existsSync(LIVENESS_FILE)) writeFailCount(0);
 
   // Server is alive — show task summary from inbox
   const inbox = readInbox().filter((t) => t.id); // only real tasks

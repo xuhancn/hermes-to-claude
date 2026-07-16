@@ -84,7 +84,6 @@ let inboxServer = null;
 function startInboxServer(users, bridge) {
   if (inboxServer && inboxServer.listening) return;
 
-  markRunning(9190, Object.keys(users.list()));
   process.stderr.write("[hbridge] HTTP inbox starting on :9190\n");
 
   inboxServer = http.createServer((req, res) => {
@@ -168,11 +167,17 @@ function startInboxServer(users, bridge) {
     }
   });
 
+  // Mark running only after successful listen (avoids race with
+  // statusline liveness check during EADDRINUSE recovery)
+  inboxServer.on("listening", () => {
+    markRunning(9190, Object.keys(users.list()));
+    process.stderr.write("[hbridge] HTTP inbox listening on :9190\n");
+  });
+
   inboxServer.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       process.stderr.write(`[hbridge] Port 9190 in use, killing old process...\n`);
       inboxServer = null;
-      // Kill the process holding the port
       try {
         const pid = execSync(
           `fuser 9190/tcp 2>/dev/null || lsof -ti :9190 2>/dev/null`,
@@ -185,7 +190,6 @@ function startInboxServer(users, bridge) {
       } catch {
         // fuser/lsof not available
       }
-      // Retry after 500ms
       setTimeout(() => startInboxServer(users, bridge), 500);
       return;
     }
