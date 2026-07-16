@@ -10,15 +10,36 @@ export class UserManager {
   }
   
   add(username) {
-    const key = "hb_" + Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
-    const formatted = key.slice(0, 6) + "-" + key.slice(6);
-    this.users[username] = { key, created: Date.now() };
+    const key = Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
+    const formatted = "hb_" + key.slice(0, 4) + "-" + key.slice(4);
+    this.users[username] = { key: key, created: Date.now() };
     this._save();
     return formatted;
   }
   
+  del(username) {
+    delete this.users[username];
+    this._save();
+  }
+
+  regenerate(username) {
+    const key = Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
+    const formatted = "hb_" + key.slice(0, 4) + "-" + key.slice(4);
+    this.users[username] = { key: key, created: Date.now() };
+    this._save();
+    return formatted;
+  }
+
+  list() {
+    return this.users;
+  }
+  
   verify(username, key) {
-    return this.users[username]?.key === key;
+    const u = this.users[username];
+    if (!u) return false;
+    // support both with/without dash
+    const flat = key.replace("-", "");
+    return u.key === flat || u.key === key;
   }
   
   _save() {
