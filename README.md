@@ -27,7 +27,7 @@ Hermes Agent                    Claude Code CLI
 Bridge 以 HTTP 服务形式运行在某台机器上，另一台机器上的 Hermes 通过 SSH 隧道调用：
 
 ```
-┌─── Mac mini ───────────────────────┐
+┌─── Hermes 宿主机 (Mac) ────────────┐
 │                                     │
 │  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
 │       ▲                            │
@@ -36,9 +36,9 @@ Bridge 以 HTTP 服务形式运行在某台机器上，另一台机器上的 Her
 └───────┼────────────────────────────┼───┘
         │                            │
    手机指令                   ┌──────▼──────────┐
-                             │ StockMan 工控机   │
-                             │ (Windows Server) │
-                             └─────────────────┘
+                             │ Claude 宿主机      │
+                             │ (Windows)          │
+                             └───────────────────┘
 ```
 
 On the Mac:
