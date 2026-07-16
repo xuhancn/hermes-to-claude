@@ -161,3 +161,13 @@ await esbuild.build({
     },
   }],
 })
+
+// Build hbridge CLI
+await esbuild.build({
+  entryPoints: [path.join(SRC_DIR, 'hbridge', 'cli.mjs')],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  outfile: 'dist/hbridge.mjs',
+  external: ['zod', 'chalk', 'axios', '@anthropic-ai/sdk', 'qrcode', 'lodash-es', 'get-east-asian-width'],
+});
