@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
+import { writeState } from "./state.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -119,6 +120,7 @@ export class Bridge {
     this.currentTask.exitCode = exitCode;
     this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
+    writeState({ latestTask: { id: this.currentTask.id, prompt: this.currentTask.prompt, status: "done", exitCode } });
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -132,6 +134,7 @@ export class Bridge {
     this.currentTask.result = reason;
     this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
+    writeState({ latestTask: { id: this.currentTask.id, prompt: this.currentTask.prompt, status: "failed" } });
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -170,6 +173,7 @@ export class Bridge {
     // Set up current task
     this.currentTask = { id, prompt, status: "running", result: "", exitCode: null };
     this.busy = true;
+    writeState({ latestTask: { id, prompt, status: "running" } });
 
     const taskDone = new Promise((resolve) => {
       this._taskResolve = resolve;
