@@ -1,166 +1,218 @@
-# Hermes-Claude-Bridge
+# Hermes-Claude-Bridge (hbridge)
 
-> Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
-
-Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required.
-
-## Why hbridge
-
-- **Leverages Claude Code built-in security** — Auto Mode protects your filesystem
-- **Simpler than SSH** — no key pairs, no authorized_keys
-- **Zero external API** — local-only, no subscription
-- **Independent auth** — hb_ keys, not OS accounts
-- **Default-off** — no attack surface when disabled
-
-### Architecture
+Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — no Pro/Max subscription required.
 
 ```
 Hermes ──HTTP──▶ hbridge:9190 ──stdio(MCP)──▶ Claude Code
-  (remote)        转发器            (auto-registered via npm)
-                      │
-               hb_XxXx-XxXx
-               sudo npm install -g . postinstall → ✓
+  (remote)        转发器            (auto-registered via postinstall)
 ```
 
-hbridge auto-registers as a Claude Code MCP server on install. All interaction is through Claude Code.
+## Why hbridge
 
-## Commands
+- **Leverages Claude Code's built-in security** — Auto Mode protects your filesystem
+- **Simple auth** — `hb_XXXX-XXXX` keys, no SSH key pairs
+- **Zero external API** — local-only, no Anthropic subscription needed
+- **Default-off** — no attack surface when disabled
+- **Cross-platform** — Windows / Linux / macOS
 
-```
-hbridge --enable [-u user]    Start bridge + generate key
-hbridge --disable             Stop bridge
-hbridge --status              Show detailed status
-node dist/hbridge.mjs --help # or: hbridge --help                Show this help
-
-hbridge --user add [name]     Add user
-hbridge --user del <name>     Delete user
-hbridge --user key <name>     Regenerate key
-hbridge --user list           List all users
-```
-
-### Remote Mode (HTTP + SSH Tunnel)
-
-Bridge runs as HTTP service on one machine, Hermes connects via SSH tunnel from another：
-
-```
-┌─── Hermes Host (Mac/Linux) ────────────┐
-│                                     │
-│  Hermes Agent ──HTTP──▶ Bridge Server (HTTP :9190)
-│       ▲                            │
-│       │                            │ SSH tunnel
-│   Telegram Gateway                     │
-└───────┼────────────────────────────┼───┘
-        │                            │
-   Mobile                   ┌──────▼──────────┐
-                             │ Claude Host      │
-                             │ (Windows/Linux)          │
-                             └───────────────────┘
-```
-
-On the Mac:
-```bash
-node src/hbridge/cli.mjs --enable
-```
-On the remote machine:
-```bash
-ssh -L 9190:localhost:9190 mac-mini
-```
-Point Hermes config to localhost:9190.
-
-## Dependencies
-
-- **Node.js ≥ 20**(22 LTS recommended)
-- **Claude Code CLI**(npx @anthropic-ai/claude-code, cc-switch compatible)
-- **Hermes Agent** any version
-
-## Developer Flow
-
-### 1. Install Node.js
-
-**Linux**
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-```
-
-**macOS**
-```bash
-brew install node@22
-```
-
-**Windows**
-```powershell
-winget install OpenJS.NodeJS.LTS
-```
-
-### 2. Clone + Build + Install
+## Quick Start
 
 ```bash
+# Install
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
-npm install
-npm run build
-node dist/hbridge.mjs --help
-sudo npm install -g .
-npm run build
-node dist/hbridge.mjs --help
-sudo npm install -g .             # → hbridge command (may need sudo)
+npm install                    # build + MCP auto-register in postinstall
+npm install -g .               # global `hbridge` command (optional)
+
+# Start
+hbridge --enable xu
+# or: node dist/hbridge.mjs --enable xu
 ```
 
-### 3. Verify
+## Hermes Integration
+
+### Configuration
+
+Add to `~/.hermes/config.yaml`:
+
+```yaml
+hbridge:
+  dev:
+    addr: 192.168.27.243:9190
+    user: xu
+    key: hb_XXXX-XXXX    # shown once on --enable
+```
+
+### API
+
+All endpoints require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check → `{"status":"ok"}` |
+| `/v1/task/create` | POST | Create a task → spawns Claude Code CLI |
+| `/v1/task/output?task_id=xxx` | GET | Get task result from inbox (persistent) |
+| `/v1/task?task_id=xxx` | GET | Get task status only |
+
+### Task Lifecycle
+
+```
+Hermes                          hbridge:9190                    Claude Code (local)
+  │                                │                                │
+  │  POST /v1/task/create          │                                │
+  │  {"prompt":"fix bug"}          │                                │
+  │──────────────────────────────▶│                                │
+  │                                │  inbox: {status:"running"}     │
+  │  {"task_id":"task_xxx",       │  statusLine: 📨 "fix bug"      │
+  │   "status":"created"}         │                                │
+  │◀──────────────────────────────│                                │
+  │                                │  spawn("npx @anthropic-ai/    │
+  │                                │    claude-code", "-p","fix bug")│
+  │                                │──────────────────────────────▶│
+  │                                │                                │  execute
+  │                                │    stdout collected           │
+  │                                │◀──────────────────────────────│
+  │                                │  inbox: {status:"done",       │
+  │                                │    result:"Fixed...",         │
+  │                                │    exitCode:0}                │
+  │                                │  statusLine: ✅ "fix bug"     │
+  │                                │                                │
+  │  GET /v1/task/output?          │                                │
+  │    task_id=task_xxx            │                                │
+  │──────────────────────────────▶│                                │
+  │  {"retrieval_status":"success",│                                │
+  │   "task":{"status":"done",    │                                │
+  │    "result":"Fixed...",       │                                │
+  │    "exitCode":0}}             │                                │
+  │◀──────────────────────────────│                                │
+```
+
+### Python SDK Example
+
+```python
+import requests, base64, time, json
+
+ADDR = "192.168.27.243:9190"
+AUTH = base64.b64encode(b"xu:hb_XXXX-XXXX").decode()
+HEADERS = {"Authorization": f"Basic {AUTH}"}
+
+# Create task
+r = requests.post(f"http://{ADDR}/v1/task/create",
+    json={"prompt": "Fix StockMan bug"},
+    headers=HEADERS)
+task_id = r.json()["task_id"]
+print(f"Task: {task_id}")
+
+# Poll for output
+while True:
+    r = requests.get(
+        f"http://{ADDR}/v1/task/output?task_id={task_id}",
+        headers=HEADERS)
+    d = r.json()
+    if d.get("retrieval_status") == "success":
+        print(f"Done: exit={d['task']['exitCode']}")
+        print(d["task"]["result"])
+        break
+    time.sleep(3)
+```
+
+## Claude Code Integration
+
+hbridge auto-registers as an MCP server on `npm install` (via `postinstall`):
+
+```
+~/.claude.json:
+  mcpServers.hbridge → node dist/hbridge.mjs --stdio
+
+~/.claude/settings.json:
+  statusLine.command → node dist/statusline.mjs
+```
+
+### MCP Tools (in Claude Code)
+
+| Tool | Description |
+|------|-------------|
+| `hbridge_enable` | Start hbridge HTTP server, generate key |
+| `hbridge_disable` | Stop hbridge |
+| `hbridge_status` | Show server status + recent Hermes tasks |
+| `hbridge_user_add` | Add a user |
+| `hbridge_user_list` | List all users |
+
+### Status Bar
+
+When hbridge is running, the bottom-right corner shows real-time task status:
+
+```
+hbridge: on | :9190 | 📨 "echo hello"     ← task running
+hbridge: on | :9190 | ✅ "fix bug"        ← task done
+hbridge: off                              ← hbridge stopped
+```
+
+### Real-time Task Log
 
 ```bash
-node dist/hbridge.mjs --help # or: hbridge --help
+tail -f ~/.hbridge_chat.log
 ```
 
-That is it. Open Claude Code and use `/mcp hbridge enable`.
-## Usage
+```
+[22:54:01] ▶ Hermes → Claude: "echo fresh task"
+[22:54:35] ✅ Claude → Hermes: exit:0 "Done — echoed."
+```
 
-> See [HERMES.md](HERMES.md) for the Hermes Agent integration guide.
+## Architecture
 
-### 1. Start hbridge
+```
+                    ┌────────────────────────────────┐
+                    │        hbridge process          │
+                    │  ┌──────────┐  ┌──────────┐   │
+Hermes ──HTTP──▶    │  │ mcp.mjs  │  │server.mjs│   │
+                    │  │ (MCP     │  │ (HTTP    │   │
+                    │  │  stdio)  │  │  fallback│   │
+                    │  └────┬─────┘  └──────────┘   │
+                    │       │                         │
+                    │  ┌────▼─────┐                    │
+                    │  │bridge.mjs│──spawn──▶ Claude  │
+                    │  │ (+inbox) │          Code CLI │
+                    │  └──────────┘                    │
+                    │       │                         │
+                    │  ┌────▼─────┐                    │
+                    │  │state.mjs │──┐                  │
+                    │  └──────────┘  │                  │
+                    └────────────────┼──────────────────┘
+                                     │
+                    ┌────────────────▼────────┐
+                    │  ~/.hbridge_state.json   │
+                    │  ~/.hbridge_inbox.json   │
+                    │  ~/.hbridge_chat.log     │
+                    └─────────────────────────┘
+```
+
+## CLI Commands
 
 ```bash
-node src/hbridge/cli.mjs --enable xu
+hbridge --enable xu              # Start server + generate key
+hbridge --disable                # Stop server
+hbridge --status                 # Show status
+hbridge --user add han           # Add user
+hbridge --user list              # List users
+hbridge --stdio                  # Run as MCP server (stdin/stdout)
 ```
 
-### 2. Load into Claude Code (MCP)
-
-Add to ~/.claude/claude_desktop_config.json:
-
-```json
-{
-  "mcpServers": {
-    "hbridge": {
-      "command": "node",
-      "args": ["dist/hbridge.mjs", "--stdio"]
-    }
-  }
-}
-```
-
-### 3. Send tasks from Hermes
+## Testing
 
 ```bash
-curl -X POST http://localhost:9190/v1/task/create   -H "Authorization: Basic $(echo -n xu:hb_KEY | base64)"   -d '{"prompt": "Fix StockMan bug"}'
+# All tests (plain Node.js, no framework)
+for f in tests/test_*.mjs; do node "$f"; done
+# 354 tests, 7 suites
 ```
-## Protocol
 
-hbridge exposes REST endpoints on port 9190:
+## Cross-Platform
 
-
-
-Authentication via HTTP Basic Auth with .
-
-
-```
-node tests/test_users.mjs     307/307
-node tests/test_cli.mjs       8/8
-node tests/test_server.mjs    3/3
-node tests/test_bridge.mjs    6/6
-node tests/test_http.mjs      4/4
-Total: 327 tests
-```
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows 10/11 | ✅ | Use `cmd.exe` for npx spawn |
+| Linux (Ubuntu 22+) | ✅ | Tested on x86_64 |
+| macOS | ✅ | Same code path as Linux |
 
 ## License
 
