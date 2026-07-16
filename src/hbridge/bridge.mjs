@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { writeFileSync, mkdirSync } from "fs";
-import { pushToInbox, updateInbox } from "./state.mjs";
+import { pushToInbox, updateInbox, chatLog } from "./state.mjs";
 
 const TASKS_DIR = "./hbridge_tasks";
 
@@ -33,6 +33,7 @@ export class Bridge {
 
     // Write to inbox for statusline
     pushToInbox({ id, prompt, status: "running", created: Date.now() });
+    chatLog("▶ Hermes → Claude:", prompt.slice(0, 120));
 
     const isWin = process.platform === "win32";
     // On Windows, .cmd files can't be spawned directly without shell:true,
@@ -65,6 +66,7 @@ export class Bridge {
       task.result = output;
       writeFileSync(`${TASKS_DIR}/${id}.txt`, output);
       updateInbox(id, { status: "done", exitCode: code, result: output, finished: Date.now() });
+      chatLog("✅ Claude → Hermes:", `exit:${code} "${output.slice(0, 100)}"`);
     });
 
     child.on("error", (err) => {

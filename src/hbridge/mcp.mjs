@@ -117,10 +117,16 @@ function startInboxServer(users, bridge) {
           try {
             const prompt = JSON.parse(body).prompt || "";
             const result = await bridge.createTask(prompt);
-            // Notify Claude user — stderr shows in Claude's CLI
-            process.stderr.write(
-              `\n  📨 HERMES TASK: ${prompt.slice(0, 80)}\n`
-            );
+            // Notify Claude via MCP logging/message
+            respond({
+              jsonrpc: "2.0",
+              method: "logging/message",
+              params: {
+                level: "info",
+                logger: "hbridge",
+                data: `📨 HERMES TASK: "${prompt.slice(0, 80)}"`,
+              },
+            });
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(result));
           } catch (e) {

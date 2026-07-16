@@ -92,3 +92,13 @@ export function updateInbox(id, updates) {
   }
   return inbox;
 }
+
+// ─── Chat log (human-readable conversation for tail -f) ────────────────
+
+const CHAT_LOG = join(homedir(), ".hbridge_chat.log");
+
+export function chatLog(prefix, msg) {
+  const time = new Date().toLocaleTimeString();
+  const line = `[${time}] ${prefix} ${msg}`;
+  try { writeFileSync(CHAT_LOG, line + "\n", { flag: "a" }); } catch {}
+}
