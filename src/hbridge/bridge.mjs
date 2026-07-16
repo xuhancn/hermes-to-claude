@@ -6,11 +6,12 @@ const TASKS_DIR = "./hbridge_tasks";
 export class Bridge {
   constructor() {
     this.tasks = new Map();
+    this._taskIdx = 0;
     mkdirSync(TASKS_DIR, { recursive: true });
   }
 
-  createTask(prompt, opts = {}) {
-    const id = `task_${Date.now()}`;
+  async createTask(prompt, opts = {}) {
+    const id = `task_${++this._taskIdx}`;
     const task = {
       id,
       prompt,
