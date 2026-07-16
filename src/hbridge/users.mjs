@@ -39,7 +39,7 @@ export class UserManager {
     if (!u) return false;
     // support both with/without dash
     const flat = key.replace("-", "").replace("hb_", "");
-    return u.key === key.replace("-", "");
+    return u.key.replace("-", "") === key.replace("-", "");
   }
   
   _save() {
