@@ -2,7 +2,7 @@
 
 > Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
 
-Local JSON-RPC bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required.
+Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required.
 
 ## Why hbridge
 
@@ -48,7 +48,7 @@ Bridge runs as HTTP service on one machine, Hermes connects via SSH tunnel from 
 ```
 ┌─── Hermes Host (Mac/Linux) ────────────┐
 │                                     │
-│  Hermes Agent ──stdio──▶ Bridge Server (HTTP :9090)
+│  Hermes Agent ──HTTP──▶ Bridge Server (HTTP :9190)
 │       ▲                            │
 │       │                            │ SSH tunnel
 │   Telegram Gateway                     │
@@ -66,7 +66,7 @@ node src/hbridge/cli.mjs --enable
 ```
 On the remote machine:
 ```bash
-ssh -L 9090:localhost:9090 mac-mini
+ssh -L 9190:localhost:9190 mac-mini
 ```
 Point Hermes config to localhost:9190.
 
@@ -124,17 +124,18 @@ node src/hbridge/cli.mjs --help
 
 ## Usage
 
-### Hermes → Claude Code(Session Control)
+```bash
+# Start bridge
+node src/hbridge/cli.mjs --enable xu
 
+# Add another user
+node src/hbridge/cli.mjs --user add han
+
+# Stop bridge
+node src/hbridge/cli.mjs --disable
 ```
-/hermes task-create "修复 StockMan ReducePosPolicy bug"
-/hermes task-status
-/hermes task-stop
-```
 
-### Claude Code → Hermes(Automation)
-
-Claude can trigger Hermes cron, Telegram notifications, pre-market scans.
+Hermes connects via HTTP to `localhost:9190` with the generated key.
 
 ## Protocol
 
@@ -153,7 +154,7 @@ node tests/test_cli.mjs       8/8
 node tests/test_server.mjs    3/3
 node tests/test_bridge.mjs    6/6
 node tests/test_http.mjs      4/4
-Total: 328 tests
+Total: 327 tests
 ```
 
 ## License
