@@ -141,14 +141,12 @@ Hermes connects via HTTP to `localhost:9190` with the generated key.
 
 ## Protocol
 
-JSON-RPC 2.0 over HTTP:
+hbridge exposes REST endpoints on port 9190:
 
-```json
-{"jsonrpc":"2.0","method":"task/create","params":{"prompt":"..."},"id":1}
-{"jsonrpc":"2.0","result":{"sessionId":"cse_xxx"},"id":1}
-```
 
-## Tests
+
+Authentication via HTTP Basic Auth with .
+
 
 ```
 node tests/test_users.mjs     307/307
