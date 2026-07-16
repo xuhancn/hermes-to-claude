@@ -97,12 +97,38 @@ function cmd_user(action, name) {
     const list = users.list();
     if (Object.keys(list).length === 0) {
       console.log("  No users");
-    } else {
+    } else if (cmd === "--help" || cmd === "-h") { showHelp(); }
+else {
       for (const [n, info] of Object.entries(list)) {
         console.log(`  ${n}  (${new Date(info.created).toISOString().slice(0,10)})`);
       }
     }
   }
+}
+
+function showHelp() {
+  console.log(`
+  hbridge — Hermes Bridge 
+
+  COMMANDS:
+    hbridge --enable [-u user]   Start bridge + generate key
+    hbridge --disable            Stop bridge
+    hbridge --status             Show detailed status
+    hbridge --help               Show this help
+
+  USER MANAGEMENT:
+    hbridge --user add [name]    Add user
+    hbridge --user del <name>    Delete user
+    hbridge --user key <name>    Regenerate key
+    hbridge --user list          List all users
+
+  EXAMPLES:
+    hbridge --enable             First start, enter username
+    hbridge --enable xu          Start as xu
+    hbridge --user add han       Add user han
+    hbridge --status             Show active connections
+  `);
+  process.exit(0);
 }
 
 const args = process.argv.slice(2);
@@ -114,6 +140,7 @@ if (cmd === "--enable") cmd_enable(sub);
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--user") cmd_user(sub, val);
+else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
   console.log("hbridge — Hermes Bridge");
   console.log("  hbridge --enable [-u user]   Start bridge");
