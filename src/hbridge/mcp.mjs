@@ -47,7 +47,9 @@ function handleMcp(msg, users, bridge) {
     respond({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
   } else if (method === "tools/call") {
     const { name, arguments: args = {} } = params;
-    let t = "";
+    // Drain pending Hermes notifications into every tool response
+    const notif = drainNotifications();
+    let t = notif;
     if (name === "hbridge_enable") {
       const uname = args.user || "bridge";
       const u = users.list();
@@ -75,6 +77,26 @@ function handleMcp(msg, users, bridge) {
       result: { content: [{ type: "text", text: t }] },
     });
   }
+}
+
+// ─── Pending notifications (unread Hermes messages for Claude) ─────────
+// These are prepended to the NEXT MCP tool response so Claude sees them.
+let pendingNotifications = [];
+
+/** Called by HTTP handler when a Hermes task arrives. */
+function pushNotification(taskId, prompt) {
+  pendingNotifications.push({ taskId, prompt, time: new Date().toLocaleTimeString() });
+  if (pendingNotifications.length > 5) pendingNotifications.shift();
+}
+
+/** Drain pending notifications into a human-readable string. */
+function drainNotifications() {
+  if (pendingNotifications.length === 0) return "";
+  const lines = pendingNotifications.map(
+    (n) => `📨 Hermes: "${n.prompt.slice(0, 80)}"`,
+  );
+  pendingNotifications = [];
+  return `─── New from Hermes ───\n${lines.join("\n")}\n────────────────────\n`;
 }
 
 // ─── HTTP inbox server (same process as MCP → stderr → Claude UI) ──────
@@ -117,16 +139,7 @@ function startInboxServer(users, bridge) {
           try {
             const prompt = JSON.parse(body).prompt || "";
             const result = await bridge.createTask(prompt);
-            // Notify Claude via MCP logging/message
-            respond({
-              jsonrpc: "2.0",
-              method: "logging/message",
-              params: {
-                level: "info",
-                logger: "hbridge",
-                data: `📨 HERMES TASK: "${prompt.slice(0, 80)}"`,
-              },
-            });
+            pushNotification(result.task_id, prompt);
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(result));
           } catch (e) {
