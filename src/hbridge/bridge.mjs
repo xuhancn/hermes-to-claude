@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
+import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { createInterface } from "readline";
 import { writeState } from "./state.mjs";
 

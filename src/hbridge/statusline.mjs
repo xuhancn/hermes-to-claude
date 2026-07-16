@@ -53,10 +53,10 @@ async function main() {
     return;
   }
 
-  const parts = [`▶️ hbridge: on`, `:${state.port}`];
+  const parts = [`hbridge: on`, `:${state.port}`];
   if (state.latestTask) {
     const icon = state.latestTask.status === "running" ? "📨" : state.latestTask.exitCode === 0 ? "✅" : "❌";
-    const msg = state.latestTask.prompt.replace(/\n/g, " ").slice(0, 30);
+    const msg = state.latestTask.prompt.replace(/\n/g, " ").slice(0, 55);
     parts.push(`${icon}"${msg}"`);
   }
   console.log(parts.join(" | "));
