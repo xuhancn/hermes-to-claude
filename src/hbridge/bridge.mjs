@@ -67,13 +67,23 @@ export class Bridge {
     });
 
     // Parse NDJSON from stdout
+    let stdoutLines = 0;
     const rl = createInterface({ input: this.child.stdout });
     rl.on("line", (line) => {
+      stdoutLines++;
+      // Log first 5 lines for debugging
+      if (stdoutLines <= 5) {
+        process.stderr.write(`[claude:stdout] ${line.slice(0, 200)}\n`);
+      }
       try {
         const msg = JSON.parse(line);
         if (!this._ready) this._ready = true;
         this._onMessage(msg);
-      } catch {}
+      } catch (e) {
+        if (stdoutLines <= 5) {
+          process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
+        }
+      }
     });
 
     this.child.on("error", (err) => {
@@ -189,7 +199,7 @@ export class Bridge {
     const msg = JSON.stringify({ type: "user", message: { content: prompt } }) + "\n";
     this.child.stdin.write(msg);
 
-    // Wait for result NDJSON (with timeout to prevent queue deadlock)
+    // Wait for result NDJSON (with timeout to prevent infinite hang)
     const winner = await Promise.race([
       taskDone,
       sleep(TASK_TIMEOUT_MS).then(() => "timeout"),
@@ -197,6 +207,7 @@ export class Bridge {
 
     if (winner === "timeout") {
       process.stderr.write(`[bridge] Task ${id} timed out after ${TASK_TIMEOUT_MS / 1000}s\n`);
+      process.stderr.write(`[bridge] Check Claude stderr above for errors\n`);
       this._failTask("timeout");
     }
 
