@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { startMcpServer } from "./mcp.mjs";
 import { createServer, startStatusBar } from "./server.mjs";
 import { UserManager } from "./users.mjs";
 import { COLORS, log } from "./utils.mjs";
@@ -103,7 +104,8 @@ function cmd_user(action, name) {
     const list = users.list();
     if (Object.keys(list).length === 0) {
       console.log("  No users");
-    } else if (cmd === "--help" || cmd === "-h") { showHelp(); }
+    } else if (cmd === "--stdio") { startMcpServer(); }
+else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
       for (const [n, info] of Object.entries(list)) {
         console.log(`  ${n}  (${new Date(info.created).toISOString().slice(0,10)})`);
@@ -146,6 +148,7 @@ if (cmd === "--enable") cmd_enable(sub);
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--user") cmd_user(sub, val);
+else if (cmd === "--stdio") { startMcpServer(); }
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
   console.log("hbridge — Hermes Bridge");
