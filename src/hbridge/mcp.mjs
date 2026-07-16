@@ -20,6 +20,7 @@ export function startMcpServer() {
 
 function handleMcp(msg, users, bridge) {
   const { method, params, id } = msg;
+  if (method === "notifications/initialized") return;
   if (method === "initialize") {
     respond({ jsonrpc: "2.0", id, result: {
       protocolVersion: "2024-11-05",
