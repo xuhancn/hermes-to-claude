@@ -1,5 +1,5 @@
 /**
- * hbridge shared state — persisted to hbridge_state.json
+ * hbridge shared state — persisted to ~/.hbridge_state.json
  *
  * Written by:
  *   - server.mjs (on HTTP server start/stop)
@@ -14,8 +14,10 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
-const STATE_FILE = "./hbridge_state.json";
+const STATE_FILE = join(homedir(), ".hbridge_state.json");
 
 const DEFAULT_STATE = {
   running: false,

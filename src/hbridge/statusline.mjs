@@ -17,8 +17,10 @@
 
 import { readState } from "./state.mjs";
 import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
-const INBOX_FILE = "./hbridge_inbox.json";
+const INBOX_FILE = join(homedir(), ".hbridge_inbox.json");
 
 function pendingCount() {
   if (!existsSync(INBOX_FILE)) return 0;
