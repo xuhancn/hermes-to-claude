@@ -2,11 +2,11 @@
 
 > Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
 
-本地 JSON-RPC 桥接，让 Hermes Agent 与 Claude Code 双向互通——不依赖 Anthropic Pro/Max 订阅。
+Local JSON-RPC bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required.
 
-## 设计
+## Design
 
-### 本地模式 (stdio)
+### Local Mode (stdio)
 
 Hermes 直接启动 `dist/bridge.mjs` 子进程，双方通过 stdin/stdout 传输 JSON-RPC 消息：
 
@@ -16,13 +16,13 @@ Hermes Agent                    Claude Code CLI
     │  JSON-RPC over stdin/stdout    │
     │←─────────────────────────────→│
     │                                │
-  methods:                          内部:
-  - task.create                   - 读写文件
-  - task.status                   - 执行命令
-  - task.stop                     - Git操作
+  methods:                          Internally:
+  - task.create                   - Read/write files
+  - task.status                   - Execute commands
+  - task.stop                     - Git operations
 ```
 
-### 远程模式 (HTTP + SSH Tunnel)
+### Remote Mode (HTTP + SSH Tunnel)
 
 Bridge 以 HTTP 服务形式运行在某台机器上，另一台机器上的 Hermes 通过 SSH 隧道调用：
 
