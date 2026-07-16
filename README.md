@@ -126,15 +126,15 @@ node src/hbridge/cli.mjs --help
 
 ### Hermes Config
 
-Add to ~/.hermes/config.yaml：
+hbridge stores users in JSON format (`hbridge_users.json`):
 
-```yaml
-# ~/.hermes/config.yaml
-bridge:
-  dev:
-    addr: 127.0.0.1:9190
-    user: xu
-    key: hb_KxVq-RmZp
+```json
+{
+  "xu": {
+    "key": "hb_XxXx-XxXx",
+    "created": 1721000000000
+  }
+}
 ```
 
 ### Claude Code Config
