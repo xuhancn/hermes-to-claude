@@ -20,7 +20,10 @@ try {
   if (!config.mcpServers) config.mcpServers = {};
   config.mcpServers.hbridge = HBRIDGE_ENTRY;
   fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
-  console.log("✓ hbridge MCP config updated");
+  // Also add statusline
+  config.statusLine = { type: "command", command: path.join(__dirname, "..", "dist", "statusline.mjs") };
+  fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
+  console.log("✓ hbridge MCP + statusLine config updated");
 } catch (e) {
   console.error("⚠ Could not register hbridge in Claude Code MCP config:", e.message);
   console.error("  Add manually: /mcp add hbridge -- hbridge --stdio");
