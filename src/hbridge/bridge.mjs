@@ -12,7 +12,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * --output-format stream-json. Tasks sent as JSON-RPC messages via
  * stdin. Results parsed from NDJSON on stdout.
  *
- *   → {"type":"user","message":{"content":"fix bug"}}
+ *   → {"role":"user","content":"fix bug"}
  *   ← {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
  *   ← {"type":"result","subtype":"success"}
  */
@@ -110,27 +110,24 @@ export class Bridge {
     this._starting = false;
   }
 
-  _onMessage(msg) {
-    process.stderr.write(`[bridge:msg] type=${msg.type} subtype=${msg.subtype || "-"} task=${!!this.currentTask}\n`);
+    _onMessage(msg) {
+    process.stderr.write(`[bridge:msg] role=${msg.role||msg.type||"?"} task=${!!this.currentTask}\n`);
     if (!this.currentTask) return;
 
-    switch (msg.type) {
-      case "assistant":
-        if (msg.message?.content) {
-          for (const block of msg.message.content) {
-            if (block.type === "text") {
-              this.currentTask.result += block.text;
-            }
-          }
+    // Claude API format: {role:"assistant", content:[{type:"text",text:"..."}]}
+    // MCP format: {type:"assistant", message:{content:[{type:"text",text:"..."}]}}
+    const content = msg.content || (msg.message && msg.message.content);
+    if (content) {
+      for (const block of content) {
+        if (block.type === "text") {
+          this.currentTask.result += block.text;
         }
-        break;
-      case "result":
-        if (msg.subtype === "success") {
-          this._finishTask(0);
-        } else {
-          process.stderr.write(`[bridge] unexpected result subtype: ${msg.subtype}\n`);
-        }
-        break;
+      }
+    }
+
+    // Completion signals
+    if (msg.stop_reason || msg.type === "result" || msg.subtype === "success") {
+      this._finishTask(0);
     }
   }
 
@@ -200,7 +197,7 @@ export class Bridge {
     });
 
     // Send prompt via JSON-RPC
-    const msg = JSON.stringify({ type: "user", message: { content: prompt } }) + "\n";
+    const msg = JSON.stringify({ role: "user", content: prompt }) + "\n";
     this.child.stdin.write(msg);
 
     // Wait for result NDJSON (with timeout to prevent infinite hang)
