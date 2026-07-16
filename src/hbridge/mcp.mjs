@@ -43,7 +43,7 @@ function handleMcp(msg, users, bridge) {
       req.on("end", () => {
         let prompt = "";
         try { prompt = JSON.parse(b).prompt; } catch(e) { prompt = b; }
-        process.stderr.write(\n[Hermes Task] " + prompt + "\n");
+        process.stderr.write("[Hermes Task] " + prompt + "\n");
         res.writeHead(200, {"Content-Type":"application/json"}); res.end(JSON.stringify({task_id:"inbox_"+Date.now(),status:"submitted"}));
       });
       return;
