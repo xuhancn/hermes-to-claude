@@ -37,15 +37,18 @@ hbridge --user list         List all users
 $ hbridge --enable
 
   ╔══════════════════════════════════╗
-  ║  H-Bridge enabled                ║
+  ║  ⚠ H-Bridge enabled             ║
+  ║  Remote access is now allowed    ║
+  ║                                  ║
   ║  User:   xu                      ║
   ║  Key:    hb_KxVq-RmZp           ║
   ║  Addr:   127.0.0.1:9190          ║
   ║         192.168.27.243:9190     ║
+  ║                                  ║
+  ║  Save this key — shown once      ║
   ╚══════════════════════════════════╝
 
-  ─────────────────────────────────────────────────────────
-  :9190 | xu, han | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
+  hbridge :9190 | xu, han | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
 ```
 
 ## Key Format
