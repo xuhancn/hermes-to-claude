@@ -22,6 +22,7 @@ const CLAUDE_ARGS = [
   "--print",
   "--input-format", "stream-json",
   "--output-format", "stream-json",
+  "--verbose",
 ];
 
 const MAX_RESTARTS = 3;
