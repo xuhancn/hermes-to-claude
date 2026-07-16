@@ -1,4 +1,5 @@
 import http from "http";
+import { randomUUID } from "crypto";
 import { execSync } from "child_process";
 import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
@@ -131,11 +132,10 @@ function startInboxServer(users, bridge) {
         req.on("end", () => {
           try {
             const prompt = JSON.parse(body).prompt || "";
-            const id = `task_${Date.now()}`;
-            // Fire and forget — don't await; HTTP returns immediately
-            bridge.createTask(prompt).catch(() => {});
+            const taskId = `task_${randomUUID()}`;
+            bridge.createTask(prompt, taskId).catch(() => {});
             res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ task_id: id, status: "created" }));
+            res.end(JSON.stringify({ task_id: taskId, status: "created" }));
           } catch (e) {
             res.writeHead(400);
             res.end(JSON.stringify({ error: e.message }));

@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { randomUUID } from "crypto";
 import { createInterface } from "readline";
 import { writeState } from "./state.mjs";
 
@@ -142,8 +143,8 @@ export class Bridge {
     }
   }
 
-  async createTask(prompt) {
-    const id = `task_${Date.now()}`;
+  async createTask(prompt, taskId) {
+    const id = taskId || `task_${randomUUID()}`;
 
     // Guard: if the child keeps dying, stop after MAX_RESTARTS
     if (this.child && this.child.killed) {
