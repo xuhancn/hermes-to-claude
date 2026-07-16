@@ -48,7 +48,7 @@ $ hbridge --enable
   ║  Save this key — shown once      ║
   ╚══════════════════════════════════╝
 
-  hbridge :9190 | xu, han | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
+  hbridge :9190 | 3 tasks | cpu 12% | mem 87MB | ↑ 15min
 ```
 
 ## Key Format
