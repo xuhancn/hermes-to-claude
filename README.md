@@ -3,9 +3,9 @@
 Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persistent JSON-RPC process — no Pro/Max subscription required.
 
 ```
-Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print)
-  (remote)                  (JSON-RPC)    stdin: {"type":"user","message":...}
-                                          stdout: {"type":"result","subtype":"success"}
+Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print --verbose)
+  (remote)                  (NDJSON)      stdin: {"type":"user","session_id":"","message":{"role":"user","content":"fix bug"},"parent_tool_use_id":null}
+                                          stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
 
 ## Why hbridge
@@ -63,19 +63,21 @@ Hermes                          hbridge:9190                    Claude Code (per
   │  POST /v1/task/create          │                                │
   │  {"prompt":"fix bug"}          │                                │
   │──────────────────────────────▶│                                │
-  │  {"task_id":"task_xxx",       │  stdin: {"type":"user",         │
-  │   "status":"created"}         │    "message":{"content":        │
-  │◀──────────────────────────────│      "fix bug"}}               │
+  │  {"task_id":"task_xxx",       │  stdin (NDJSON):               │
+  │   "status":"created"}         │  {"type":"user",               │
+  │◀──────────────────────────────│   "session_id":"",             │
+  │  (immediate, no wait)         │   "message":{"role":"user",    │
+  │                                │    "content":"fix bug"},      │
+  │                                │   "parent_tool_use_id":null}  │
   │                                │──────────────────────────────▶│
   │                                │                                │  execute
-  │                                │    stdout: {"type":"assistant",│
-  │                                │      "message":{"content":[    │
-  │                                │        {"type":"text",         │
-  │                                │         "text":"Fixed..."}]}}  │
+  │                                │  stdout (NDJSON):              │
+  │                                │  {"role":"assistant",          │
+  │                                │   "content":[{"type":"text",   │
+  │                                │    "text":"Fixed..."}]}       │
   │                                │◀──────────────────────────────│
-  │                                │    stdout: {"type":"result",   │
-  │                                │      "subtype":"success"}      │
-  │                                │◀──────────────────────────────│
+  │                                │  (completion via stop_reason   │
+  │                                │   or type=="result")           │
   │                                │                                │
   │  GET /v1/task/output?          │                                │
   │    task_id=task_xxx            │                                │
@@ -143,8 +145,9 @@ hbridge auto-registers as an MCP server on `npm install` (via `postinstall`):
 When hbridge is running, the bottom-right corner shows service status (Claude Code polls ~3-5s):
 
 ```
-hbridge: on | :9190     ← service running
-hbridge: off             ← service stopped
+▶️ hbridge: on | :9190 | 📨"fix bug"     ← task running
+▶️ hbridge: on | :9190 | ✅"echo hello"  ← task done (exit:0)
+⏹️ hbridge: off                           ← service stopped
 ```
 
 ## Architecture
@@ -155,15 +158,15 @@ Hermes ──HTTP──▶ hbridge:9190
               ┌─────▼──────┐
               │  mcp.mjs   │── MCP stdio ──▶ Claude Code
               │  (HTTP +   │                    │
-              │   MCP)     │◀─ JSON-RPC ────────┘
+              │   MCP)     │◀─ NDJSON ──────────┘
               └─────┬──────┘   stdin/stdout
                     │          (persistent --print
-              ┌─────▼──────┐    stream-json)
+              ┌─────▼──────┐    stream-json --verbose)
               │ bridge.mjs │
               │ (persistent│
               │  Claude    │
               │  process)  │
-              └────────────┘
+              └─────┬──────┘
                     │
               ┌─────▼──────┐
               │ state.mjs  │── ~/.hbridge_state.json

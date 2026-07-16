@@ -1,50 +1,50 @@
 # Optimization Ideas
 
-Current state after persistent Claude process + JSON-RPC refactor.
+Current state after PR #14 fixes (persistent Claude process + correct NDJSON format).
 
 ## 🟡 Medium
 
-### 1. Sequential queue blocks new tasks
-`createTask()` polls `setInterval` until previous task finishes. No parallelism.
-**Fix:** Use proper promise queue (e.g. p-queue) instead of busy-poll.
+### 1. Sequential queue busy-polls
+`createTask` polls `setInterval` until previous task finishes.
+**Fix:** Use proper promise queue (p-queue pattern) instead of busy-poll.
 
-### 2. No task timeout
-If Claude --print hangs, task stays "running" forever, next task never starts.
-**Fix:** `_finishTask` timeout (e.g. 5 min) → kill and restart Claude process.
+### 2. Task timeout kills queue
+5-min timeout marks task failed and advances queue. But subsequent tasks
+may depend on the failed one.
+**Fix:** Let caller decide timeout behavior (or disable timeout entirely).
 
-### 3. StatusLine only shows on/off
-No task info in bottom bar. User asked for "format A" earlier.
-**Fix:** Expose current task info via state.mjs, statusline reads it.
+### 3. No Claude process health check
+If Claude process crashes, Bridge auto-restarts (up to 3 times). But
+no alert to user.
+**Fix:** Write crash count to state file, statusLine shows it.
 
-### 4. State file not cleaned up
-`~/.hbridge_state.json` stays as `running: false` after disable. No auto-cleanup.
-**Fix:** Delete state file on disable.
+### 4. StatusLine only shows latest task
+If tasks queue up, only the current/running task is visible.
+**Fix:** Expose queue depth in state file.
 
 ## 🟢 Low
 
-### 5. Auth base64 parsing fragile
+### 5. State file writes synchronously
+`writeFileSync` blocks on every state update.
+**Fix:** Use `writeFile` (async) for non-critical state writes.
+
+### 6. Auth base64 fragile
 `Buffer.from(b64,"base64").toString().split(":")` breaks if key contains `:`.
-**Fix:** Use lastIndexOf(":") to split username from key.
+**Fix:** Use `lastIndexOf(":")` to split username from key.
 
-### 6. test_bridge.mjs needs update
-Tests Bridge instance methods but new Bridge auto-spawns Claude on construction.
-**Fix:** Make Claude spawn lazy (on first createTask).
+### 7. test_setup_mcp.mjs stale
+Uses `/tmp/` paths (Linux) and old config format.
+**Fix:** Update test or remove it.
 
-### 7. No Claude process health check
-If child Claude process crashes, Bridge auto-restarts it on next createTask. But if it crashes repeatedly, no backoff.
-**Fix:** Add restart limit + exponential backoff.
+## ✅ Resolved
 
-### 8. hbridge_state.json writes synchronously
-`writeFileSync` blocks the event loop on every state update. Low impact but unnecessary.
-**Fix:** Use `writeFile` (async) for state writes.
-
-## ✅ Resolved in v0.3
-
-| Item | Status |
-|------|--------|
-| Inbox persistence | Removed (no files) |
-| Chat log | Removed |
-| EADDRINUSE race | Resolved (single HTTP server) |
-| Spawn -p escaping | Resolved (JSON-RPC stdin) |
-| Cold start per task | Resolved (persistent process) |
-| 3-failure liveness debounce | Removed (simple on/off) |
+| Item | PR/Commit |
+|------|-----------|
+| Missing `\n` in stdin NDJSON | PR #14 |
+| Missing `--verbose` flag | PR #14 |
+| Wrong stdin message format | PR #14 |
+| Wrong completion detection | PR #14 |
+| Inbox persistence (removed) | v0.3 |
+| Spawn -p escaping (fixed) | v0.3 |
+| EADDRINUSE crash (fixed) | v0.3 |
+| StatusLine task info (restored) | v0.3 |
