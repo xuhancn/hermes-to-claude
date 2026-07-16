@@ -108,7 +108,7 @@ else {
 
 function showHelp() {
   console.log(`
-  hbridge — Hermes Bridge 汉的桥
+  hbridge — Hermes Bridge 
 
   COMMANDS:
     hbridge --enable [-u user]   启动 Bridge + 生成 Key
