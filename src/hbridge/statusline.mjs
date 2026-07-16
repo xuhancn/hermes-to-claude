@@ -91,21 +91,20 @@ async function main() {
   // Liveness OK — reset failure counter
   if (existsSync(LIVENESS_FILE)) writeFailCount(0);
 
-  // Server is alive — show latest Hermes conversation in status bar
+  // Server is alive — show latest N tasks (format A)
   const inbox = readInbox().filter((t) => t.id);
-  const latest = inbox[inbox.length - 1];
-  const running = inbox.filter((t) => t.status === "running").length;
+  const total = inbox.length;
 
   const parts = [`hbridge: on`, `:${state.port}`];
 
-  if (latest) {
-    const label = latest.status === "running" ? "📨" : "✅";
-    const msg = latest.prompt.replace(/\n/g, " ").slice(0, 40);
-    parts.push(`${label} "${msg}"`);
-    if (running > 0 && running < inbox.length) {
-      parts.push(`+${inbox.length - running} done`);
-    }
+  // Show up to 3 most recent tasks with status icon
+  for (const t of inbox.slice(-3).reverse()) {
+    const icon = t.status === "running" ? "📨" : t.exitCode === 0 ? "✅" : "❌";
+    const msg = t.prompt.replace(/\n/g, " ").slice(0, 20);
+    parts.push(`${icon}"${msg}"`);
   }
+
+  if (total > 3) parts.push(`+${total - 3} more`);
 
   console.log(parts.join(" | "));
 }
