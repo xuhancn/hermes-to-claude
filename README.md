@@ -1,6 +1,6 @@
 # Hermes-Claude-Bridge (hbridge)
 
-> Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode).
+> Forked from [soyou19/Open-ClaudeCode](https://github.com/soyou19/Open-ClaudeCode) — bridge transport layer extracted as standalone project, auth code removed, all dependencies inlined into `claude-code-deps/`.
 
 **hbridge** connects Hermes Agent to Claude Code via local HTTP — no Pro/Max, no SSH certs, no system user management.
 
