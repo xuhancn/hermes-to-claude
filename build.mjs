@@ -171,3 +171,12 @@ await esbuild.build({
   outfile: 'dist/hbridge.mjs',
   external: ['zod', 'chalk', 'axios', '@anthropic-ai/sdk', 'qrcode', 'lodash-es', 'get-east-asian-width'],
 });
+
+// Build statusline — pure Node.js, no external deps
+await esbuild.build({
+  entryPoints: [path.join(SRC_DIR, 'hbridge', 'statusline.mjs')],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  outfile: 'dist/statusline.mjs',
+});

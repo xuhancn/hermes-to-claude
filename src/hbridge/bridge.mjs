@@ -30,14 +30,17 @@ export class Bridge {
     const task = this.tasks.get(id);
     if (!task) return;
     const isWin = process.platform === "win32";
+    // On Windows, .cmd files can't be spawned directly without shell:true,
+    // which triggers a deprecation warning. Use cmd.exe explicitly instead.
+    const escapedPrompt = prompt.replace(/"/g, '\\"');
+    const cmdLine = `npx.cmd @anthropic-ai/claude-code -p "${escapedPrompt}"`;
     const child = spawn(
-      isWin ? "npx.cmd" : "npx",
-      ["@anthropic-ai/claude-code", "-p", prompt],
+      isWin ? "cmd.exe" : "npx",
+      isWin ? ["/d", "/s", "/c", cmdLine] : ["@anthropic-ai/claude-code", "-p", prompt],
       {
         cwd: process.cwd(),
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env },
-        shell: isWin,
       }
     );
 
