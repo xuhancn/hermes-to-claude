@@ -197,7 +197,7 @@ export class Bridge {
     });
 
     // Send prompt via JSON-RPC
-    const msg = JSON.stringify({ role: "user", content: prompt }) + "\n";
+    const msg = JSON.stringify({ type: "user", session_id: "", message: { role: "user", content: prompt }, parent_tool_use_id: null }) + "\n";
     this.child.stdin.write(msg);
 
     // Wait for result NDJSON (with timeout to prevent infinite hang)
