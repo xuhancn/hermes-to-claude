@@ -1,8 +1,8 @@
 import { UserManager } from "../src/hbridge/users.mjs";
 import { unlinkSync, existsSync } from "fs";
+import { randomBytes } from "crypto";
 
-const DB = "./tests/hbridge_users_test.json";
-function cleanup() { if (existsSync(DB)) unlinkSync(DB); }
+function cleanup() { if (existsSync("hbridge_users.json")) unlinkSync("hbridge_users.json"); }
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -10,37 +10,37 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-cleanup();
-// NOTE: DB path is hardcoded in users.mjs — need to write test file manually
-import { writeFileSync } from "fs";
-
-// Directly test key format logic
-import { randomBytes } from "crypto";
+// 1. Key format test (100 samples)
 const BASE52 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 for (let i = 0; i < 100; i++) {
   const raw = Array.from({ length: 8 }, () => BASE52[randomBytes(1)[0] % 52]).join("");
-  const formatted = "hb_" + raw.slice(0, 4) + "-" + raw.slice(4);
-  assert(formatted.startsWith("hb_"), `key prefix [${i}]`);
-  assert(formatted.length === 12, `key length ${formatted.length} [${i}]`);
-  assert(formatted[6] === "-" || formatted[7] === "-", `dash missing [${i}]`);
+  const key = "hb_" + raw.slice(0, 4) + "-" + raw.slice(4);
+  assert(key.startsWith("hb_"), `prefix`);
+  assert(key.length === 12, `length=${key.length}`);
+  assert(key[7] === "-", `dash position`);
 }
 console.log("Key format: 100/100 OK");
 
-// Test verify logic directly
+// 2. UserManager: add + verify (exact match)
+cleanup();
 const users = new UserManager();
 const key = users.add("xu");
-console.log(`Generated key: ${key}`);
-const flat = key.replace(/[^A-Za-z]/g, ""); // strip hb_ and dash
-assert(key[7] === "-", `dash at position 7: ${key}`);
+console.log(`Key: ${key}`);
 
-// Verify — see what happens
-const ok1 = users.verify("xu", key); // with dash
-console.log(`verify with dash: ${ok1}`);
-assert(ok1, "verify with dash");
+// 所见即所得 — exact match
+assert(users.verify("xu", key), "exact match");
+assert(!users.verify("xu", key + "x"), "wrong key rejected");
+assert(!users.verify("xu", "wrong"), "garbage rejected");
 
-const ok2 = users.verify("xu", key.replace("-", ""));
-console.log(`verify without dash: ${ok2}`);
-assert(ok2, "verify without dash");
+// 3. Regenerate
+const key2 = users.regenerate("xu");
+assert(key2 !== key, "regen new key");
+assert(users.verify("xu", key2), "regen key works");
+
+// 4. List + Del
+assert(!!users.list().xu, "list has xu");
+users.del("xu");
+assert(!users.list().xu, "xu deleted");
 
 cleanup();
 console.log(`${pass} passed, ${fail} failed`);
