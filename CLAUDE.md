@@ -8,28 +8,37 @@ npm run build          # → dist/bridge.mjs
 
 ## Test
 ```bash
-node dist/bridge.mjs --help   # 验证编译成功
+node dist/bridge.mjs --help
 ```
 
-## Commit
-- 功能分支: `dev_xxx_日期`
-- 每批 ≤ 5 文件
+## 开发铁律
+
+### Branch
+- 功能分支: `dev_功能名_日期` (如 `dev_bridge_auth_0716`)
+- 分支名必须全英文, 禁止中文
+- 从 main 拉分支 → 开发 → PR → review → merge
+
+### Commit
+- 每批 ≤ 5 文件, 原子变更
 - format 最后一步
-- PR → review → merge
+- commit message 用英文, 简述改动
 
-## 目录结构
-```
-src/                  bridge 源码 (29 + 7 恢复文件)
-claude-code-deps/     Claude Code 依赖 (40+ stub)
-dist/                 esbuild 输出
-```
+### Review
+- PR 创建后等待 review
+- ❌ AI 不自行 merge
+- ❌ AI 不直接推 main
+- ✅ 用户审批后 merge
 
-## 依赖更新规则
-- `claude-code-deps/` 文件坏了 → 修 stub
-- 不改 `src/` 里的 bridge 核心逻辑（从 Open-ClaudeCode 分离的原始代码）
-- 认证绕过在 7 个恢复文件中处理
-
-## 禁止
+### 目录
 - ❌ 不建新 repo
-- ❌ 不自己 merge 到 main
-- ❌ 不加回从 submodule 删掉的认证文件
+- ❌ 不删现有文件(只标记 deprecated)
+- ❌ 不加回已删除的认证文件
+
+### 依赖
+- `claude-code-deps/` stub 坏了 → 修 stub
+- 不改 `src/` 核心逻辑(从 Open-ClaudeCode 分离的原始代码)
+
+### 通用
+- 只加不减, 控制变量
+- 回退到正确版本再叠加
+- 记忆是累积(GET)不是替换(SET)
