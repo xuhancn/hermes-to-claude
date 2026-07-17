@@ -1,6 +1,6 @@
 # Hermes-Claude-Bridge (hbridge)
 
-Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persistent JSON-RPC process — no Pro/Max subscription required.
+Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persistent JSON-RPC process — **no Pro/Max subscription required**.
 
 ```
 Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print --verbose)
@@ -8,54 +8,88 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
                                           stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
 
-## Why hbridge
+**Use cases:**
 
-- **Leverages Claude Code's built-in security** — Auto Mode protects your filesystem
-- **Simple auth** — `hb_XXXX-XXXX` keys, no SSH key pairs
-- **Zero external API** — local-only, no Anthropic subscription needed
-- **Default-off** — no attack surface when disabled
-- **Cross-platform** — Windows / Linux / macOS
+- **Remote control**: Send tasks from your phone via Hermes — hbridge forwards to Claude Code running on your machine. Fix bugs, review code, run commands without sitting at your desk.
+- **Dev assistant**: Hermes handles lightweight tasks; when it hits a codebase-specific problem, it delegates to Claude Code via hbridge. Claude reads the project, edits files, runs tests, and reports back.
+- **Centralized hub**: Hermes becomes your single entry point — it routes tasks to the right tool (Claude Code, web search, etc.) and aggregates results. hbridge is the Claude Code plugin in this ecosystem.
 
-## Prerequisites
+## Advanced of hbridge
 
-Install **Node.js 22+** if you don't have it yet:
+- **Security**: Hermes never touches your filesystem — all file ops go through Claude Code's Auto Mode permission system. No blind access.
+- **Auth**: One-time `--enable` generates `hb_XXXX-XXXX` key (Base52, ~45.6-bit entropy). No SSH, no OAuth.
+- **Local-only**: Fully offline. No cloud, no external API, no Anthropic subscription.
+- **Default-off**: Zero ports open until explicit `--enable`. No attack surface when disabled.
+- **Cross-platform**: Windows (cmd.exe), Linux, macOS — single codebase, tested on all three.
 
-**Linux (Ubuntu/Debian)**
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
+## 1. Design Framework
+
+```
+Phone / MCP Client  ──▶  Hermes Agent  ──HTTP──▶  hbridge :9190  ──stdio──▶  Claude Code (persistent)
+                      (task orchestration)       │                              │
+                                                  │  mcp.mjs (HTTP + MCP)       │  reads CLAUDE.md
+                                                  │  bridge.mjs (process mgr)   │  loads skills
+                                                  │  state.mjs (state file)     │  edits files
+                                                  └─────────────────────────────┘
 ```
 
-**macOS**
+Hermes orchestrates tasks. hbridge translates HTTP requests into NDJSON messages for a single persistent Claude Code process. Claude executes — reads CLAUDE.md, loads skills, edits files — and streams results back. Hermes never touches your filesystem directly; all file operations go through Claude Code's permission system.
+
+**Detail references:**
+- [Spawn protocol](docs/spawn-mechanism.md) — Claude spawn command, NDJSON message format, completion detection
+- [MCP spec mapping](docs/mcp-spec.md) — MCP lifecycle, tool definitions, response formats
+- [Home local mode](docs/local-mode.md) — zero-config auto-start mode (experimental)
+- [Module design](DESIGN.md) — key format, task queuing, state files
+
+## 2. How to Build from Source
+
+### Prerequisites
+
+Install **Node.js 22+** :
+
+| Platform | Command |
+|----------|---------|
+| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt install -y nodejs` |
+| macOS | `brew install node@22` |
+| Windows | `winget install OpenJS.NodeJS.LTS` |
+
+Verify: `node --version` → `v22.x.x`
+
+### Install & Build
+
 ```bash
-brew install node@22
-```
-
-**Windows**
-```powershell
-winget install OpenJS.NodeJS.LTS
-```
-
-Verify it's installed:
-```bash
-node --version   # v22.x.x
-```
-
-## Quick Start
-
-```bash
-# Install
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install                    # build + MCP auto-register in postinstall
-npm install -g .               # global `hbridge` command (optional)
-
-# Start
-hbridge --enable xu
-# or: node dist/hbridge.mjs --enable xu
+npm install -g .               # optional: global hbridge command
 ```
 
-## Hermes Integration
+`npm install` runs `build.mjs` (via preinstall) to produce `dist/hbridge.mjs` + `dist/statusline.mjs`, then registers the MCP server and statusLine in your `~/.claude` configs (via postinstall).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `hbridge --enable <user>` | Start HTTP server on :9190, generate access key |
+| `hbridge --disable` | Stop server |
+| `hbridge --status` | Show server status |
+| `hbridge --user add <name>` | Add a new user |
+| `hbridge --user list` | List all users |
+| `hbridge --stdio` | Run as MCP server (stdin/stdout) |
+
+All endpoints except `/health` require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
+
+### Cross-Platform
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows 10/11 | ✅ | Spawn via `cmd.exe /d /s /c npx.cmd` |
+| Linux (Ubuntu 22+) | ✅ | `npx` directly |
+| macOS | ✅ | Same code path as Linux |
+
+## 3. Hermes Integration
+
+*This section is for the Hermes Agent. After the user enables hbridge, Hermes reads this config to connect.*
 
 ### Configuration
 
@@ -65,13 +99,11 @@ Add to `~/.hermes/config.yaml`:
 hbridge:
   dev:
     addr: 192.168.27.243:9190
-    user: xu
+    user: <username>
     key: hb_XXXX-XXXX    # shown once on --enable
 ```
 
-### API
-
-All endpoints require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
+### API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -117,7 +149,7 @@ Hermes                          hbridge:9190                    Claude Code (per
 ### Quick Check (curl)
 
 ```bash
-BASE64=$(echo -n "xu:hb_XXXX-XXXX" | base64)
+BASE64=$(echo -n "<username>:hb_XXXX-XXXX" | base64)
 curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
 # → {"status":"ok"}
 ```
@@ -128,7 +160,7 @@ curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
 import requests, base64, time, json
 
 ADDR = "192.168.27.243:9190"
-AUTH = base64.b64encode(b"xu:hb_XXXX-XXXX").decode()
+AUTH = base64.b64encode(b"<username>:hb_XXXX-XXXX").decode()
 HEADERS = {"Authorization": f"Basic {AUTH}"}
 
 # Create task
@@ -154,12 +186,12 @@ while True:
 ### Security
 
 - **Default-off**: User must run `hbridge --enable` (or `/mcp hbridge enable` in Claude Code) before Hermes can connect. No attack surface when disabled.
-- **Key once**: Access key (`hb_XXXX-XXXX`) is shown once on `--enable`. User dictates the key to the Hermes agent operator.
-- **Local-only**: Auth required for all endpoints except `/health`. No external API dependency.
+- **Key once**: Access key (`hb_XXXX-XXXX`) is shown once on `--enable`. User dictates the key to the Hermes operator. Keys use 8 Base52 characters (`crypto.randomBytes()`), ~45.6 bits of entropy.
+- **Local-only**: Auth required for all endpoints except `/health`. No external API, no data leaves the machine.
 
 ## Claude Code Integration
 
-hbridge auto-registers as an MCP server on `npm install` (via `postinstall`):
+hbridge auto-registers as an MCP server on `npm install` (via postinstall):
 
 ```
 ~/.claude.json:
@@ -189,40 +221,6 @@ When hbridge is running, the bottom-right corner shows service status (Claude Co
 ⏹️ hbridge: off                           ← service stopped
 ```
 
-## Architecture
-
-```
-Hermes ──HTTP──▶ hbridge:9190
-                    │
-              ┌─────▼──────┐
-              │  mcp.mjs   │── MCP stdio ──▶ Claude Code
-              │  (HTTP +   │                    │
-              │   MCP)     │◀─ NDJSON ──────────┘
-              └─────┬──────┘   stdin/stdout
-                    │          (persistent --print
-              ┌─────▼──────┐    stream-json --verbose)
-              │ bridge.mjs │
-              │ (persistent│
-              │  Claude    │
-              │  process)  │
-              └─────┬──────┘
-                    │
-              ┌─────▼──────┐
-              │ state.mjs  │── ~/.hbridge_state.json
-              └────────────┘
-```
-
-## CLI Commands
-
-```bash
-hbridge --enable xu              # Start server + generate key
-hbridge --disable                # Stop server
-hbridge --status                 # Show status
-hbridge --user add han           # Add user
-hbridge --user list              # List users
-hbridge --stdio                  # Run as MCP server (stdin/stdout)
-```
-
 ## Testing
 
 ```bash
@@ -232,14 +230,6 @@ for f in tests/test_*.mjs; do node "$f"; done
 ```
 
 Note: `test_setup_mcp.mjs` requires Linux paths (stale test, needs update).
-
-## Cross-Platform
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Windows 10/11 | ✅ | Use `cmd.exe` for npx spawn |
-| Linux (Ubuntu 22+) | ✅ | Tested on x86_64 |
-| macOS | ✅ | Same code path as Linux |
 
 ## License
 
