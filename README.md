@@ -97,9 +97,9 @@ Add to `~/.hermes/config.yaml`:
 ```yaml
 hbridge:
   machines:
-    - addr: IP:port
-      key: hb_xxx
-      cwd: /path
+    - addr: 192.168.27.88:9761
+      key: hb_xxxxxxxx
+      cwd: /absolute/path/to/project
 ```
 
 ### API Endpoints
