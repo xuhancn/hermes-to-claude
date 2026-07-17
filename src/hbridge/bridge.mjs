@@ -27,9 +27,25 @@ const CLAUDE_ARGS = [
   "--dangerously-skip-permissions",
 ];
 
-const MAX_RESTARTS = 3;
-const RESTART_DELAY_MS = 2000;
 const TASK_TIMEOUT_MS = 300_000; // 5 min — kill stuck tasks
+
+// ── Connection state machine ──────────────────────────────────────
+const STATE = {
+  IDLE: 'idle',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  RECONNECTING: 'reconnecting',
+  FAILED: 'failed',
+};
+
+// ── Auto-reconnect (exponential backoff) ──────────────────────────
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30_000;
+const RECONNECT_GIVE_UP_MS = 600_000; // 10 min
+
+// ── Keep-alive + liveness ─────────────────────────────────────────
+const KEEPALIVE_INTERVAL_MS = 30_000;  // send keep_alive every 30s
+const LIVENESS_TIMEOUT_MS = 120_000;   // treat as dead after 2min silence
 
 export class Bridge {
   constructor() {
@@ -38,46 +54,81 @@ export class Bridge {
     this.currentTask = null;
     this._results = new Map();
     this._taskResolve = null;
-    this._starting = false;
-    this._ready = false;
-    this._restarts = 0;
 
-    // Transport layer
+    // ── Connection state machine ──
+    /** @type {'idle'|'connecting'|'connected'|'reconnecting'|'failed'} */
+    this._state = STATE.IDLE;
+    /** True when child has sent at least one JSON line (stdin writable check). */
+    this._ready = false;
+
+    // ── Transport layer ──
     /** @type {StdioTransport|null} */
     this.transport = null;
     /** Echo-dedup ring buffer for stdout messages. */
     this._recentUUIDs = new BoundedUUIDSet(2000);
 
-    // Task streaming — Map<taskId, Set<{ write: (chunk: string) => void }>>
+    // ── Task streaming — Map<taskId, Set<{ write: (chunk: string) => void }>> ──
     /** @type {Map<string, Set<{ write: (data: string) => void }>>} */
     this._taskSubscribers = new Map();
+
+    // ── Auto-reconnect state ──
+    /** @type {number} */
+    this._reconnectAttempts = 0;
+    /** @type {number|null} */
+    this._reconnectStartTime = null;
+    /** @type {NodeJS.Timeout|null} */
+    this._reconnectTimer = null;
+
+    // ── Keep-alive + liveness ──
+    /** @type {number} */
+    this._lastActivityTime = 0;
+    /** @type {NodeJS.Timeout|null} */
+    this._keepAliveTimer = null;
+    /** @type {NodeJS.Timeout|null} */
+    this._livenessTimer = null;
   }
 
+  /**
+   * Spawn Claude Code child process and connect transport.
+   * Uses state machine — safe to call even if already connected.
+   * @returns {Promise<boolean>} true if connected successfully
+   */
   async _startClaude() {
-    if (this.child && !this.child.killed) return;
-    if (this._starting) {
-      while (this._starting) await sleep(200);
-      return;
+    // Already connected — nothing to do
+    if (this._state === STATE.CONNECTED && this.child && !this.child.killed) {
+      return true;
+    }
+    // Another call is already spawning — wait for it
+    if (this._state === STATE.CONNECTING) {
+      while (this._state === STATE.CONNECTING) await sleep(200);
+      return this._state === STATE.CONNECTED;
     }
 
-    this._starting = true;
+    this._state = STATE.CONNECTING;
     this._ready = false;
 
     const isWin = process.platform === "win32";
     const cmd = isWin ? "cmd.exe" : "npx";
     const args = isWin ? ["/d", "/s", "/c", `npx.cmd ${CLAUDE_ARGS.join(" ")}`] : CLAUDE_ARGS;
 
-    this.child = spawn(cmd, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
-    });
+    try {
+      this.child = spawn(cmd, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env },
+      });
+    } catch (err) {
+      process.stderr.write(`[bridge] spawn error: ${err.message}\n`);
+      this._state = STATE.FAILED;
+      return false;
+    }
 
     // Create transport layer — wraps child stdin/stdout
     this.transport = new StdioTransport(this.child);
 
-    // Wire inbound messages — full transcript is recorded by transport's
-    // NDJSON tee at ~/.hbridge_transcript.jsonl
+    // Wire inbound messages
     this.transport.setOnData((line) => {
+      // Reset liveness timer on any data
+      this._resetLiveness();
       try {
         const msg = JSON.parse(line);
         if (!this._ready) this._ready = true;
@@ -89,8 +140,11 @@ export class Bridge {
 
     this.transport.setOnClose((code) => {
       process.stderr.write(`[bridge] transport closed (code=${code})\n`);
-      if (code !== 0) {
+      this._clearKeepAlive();
+      this._clearLiveness();
+      if (this._state === STATE.CONNECTED || this._state === STATE.CONNECTING) {
         this._failTask(`Claude process exited (code=${code})`);
+        this._scheduleReconnect();
       }
     });
 
@@ -104,10 +158,21 @@ export class Bridge {
           if (this._ready) { clearInterval(check); resolve(); }
         }, 50);
       }),
-      sleep(5000),
+      sleep(5000).then(() => { if (!this._ready) return 'timeout'; }),
     ]);
 
-    this._starting = false;
+    if (!this._ready) {
+      process.stderr.write(`[bridge] process not ready after 5s\n`);
+      this._state = STATE.FAILED;
+      this._scheduleReconnect();
+      return false;
+    }
+
+    this._state = STATE.CONNECTED;
+    this._resetReconnectState();
+    this._ensureKeepAlive();
+    this._resetLiveness();
+    return true;
   }
 
   /**
@@ -198,20 +263,29 @@ export class Bridge {
   async createTask(prompt, taskId) {
     const id = taskId || `task_${randomUUID()}`;
 
-    // Guard: if the child keeps dying, stop after MAX_RESTARTS
-    if (this.child && this.child.killed) {
-      this._restarts++;
-      if (this._restarts > MAX_RESTARTS) {
-        this._restarts = 0;
-        throw new Error(`Claude process crashed ${MAX_RESTARTS}+ times, giving up`);
-      }
-    } else if (!this.child) {
-      this._restarts = 0;
+    // Guard: if reconnection budget exhausted, reject immediately
+    if (this._state === STATE.FAILED) {
+      throw new Error('Bridge connection failed — restart the server');
     }
 
-    // Ensure Claude is running
-    if (!this.child || this.child.killed) {
-      await this._startClaude();
+    // If reconnecting, wait for connection (or timeout)
+    if (this._state === STATE.RECONNECTING) {
+      const deadline = Date.now() + RECONNECT_GIVE_UP_MS;
+      while (this._state === STATE.RECONNECTING) {
+        await sleep(500);
+        if (Date.now() > deadline) {
+          this._state = STATE.FAILED;
+          throw new Error('Reconnection timed out');
+        }
+      }
+    }
+
+    // Ensure Claude is running (state machine handles concurrency)
+    if (this._state !== STATE.CONNECTED) {
+      const ok = await this._startClaude();
+      if (!ok) {
+        throw new Error('Failed to start Claude process');
+      }
     }
 
     // Queue: wait for previous task to finish
@@ -247,6 +321,10 @@ export class Bridge {
     };
     this.transport?.write(msg).catch((err) => {
       process.stderr.write(`[bridge] transport write error: ${err.message}\n`);
+      // A write error suggests the child process is dead — trigger reconnect
+      if (this._state === STATE.CONNECTED) {
+        this._scheduleReconnect();
+      }
     });
 
     // Wait for result (with timeout to prevent infinite hang)
@@ -363,5 +441,136 @@ export class Bridge {
    */
   _cleanupSubscribers(taskId) {
     this._taskSubscribers.delete(taskId);
+  }
+
+  // ── Connection state ────────────────────────────────────────────────
+
+  /** @returns {string} Current connection state label. */
+  getState() {
+    return this._state;
+  }
+
+  // ── Auto-reconnect ──────────────────────────────────────────────────
+
+  /**
+   * Schedule a reconnection attempt with exponential backoff.
+   * @returns {boolean} true if reconnection was scheduled
+   */
+  _scheduleReconnect() {
+    if (this._state === STATE.FAILED || this._state === STATE.IDLE) return false;
+    if (this._reconnectTimer) return true; // already scheduled
+
+    this._state = STATE.RECONNECTING;
+
+    const now = Date.now();
+    if (!this._reconnectStartTime) {
+      this._reconnectStartTime = now;
+    }
+
+    const elapsed = now - this._reconnectStartTime;
+    if (elapsed >= RECONNECT_GIVE_UP_MS) {
+      process.stderr.write(`[bridge] reconnect give up after ${Math.round(elapsed / 1000)}s\n`);
+      this._state = STATE.FAILED;
+      // Clear pending tasks
+      if (this.currentTask) {
+        // kill() may have already failed the task — skip if null
+        try { this._failTask('connection lost'); } catch {}
+      }
+      return false;
+    }
+
+    this._reconnectAttempts++;
+    const baseDelay = Math.min(
+      RECONNECT_BASE_MS * Math.pow(2, this._reconnectAttempts - 1),
+      RECONNECT_MAX_MS,
+    );
+    // ±25% jitter
+    const delay = Math.max(0, baseDelay + baseDelay * 0.25 * (2 * Math.random() - 1));
+
+    process.stderr.write(
+      `[bridge] reconnect in ${Math.round(delay)}ms (attempt ${this._reconnectAttempts}, ${Math.round(elapsed / 1000)}s elapsed)\n`,
+    );
+
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer = null;
+      // Clean up old child + transport before retry
+      this._cleanupProcess();
+      const ok = await this._startClaude();
+      if (!ok && this._state !== STATE.FAILED) {
+        // startClaude already called _scheduleReconnect on failure
+        // Only fall through if it didn't (e.g. already connected)
+      }
+    }, delay);
+
+    return true;
+  }
+
+  /** Reset reconnect state after successful connection. */
+  _resetReconnectState() {
+    this._reconnectAttempts = 0;
+    this._reconnectStartTime = null;
+  }
+
+  /** Clean up child process and transport resources. */
+  _cleanupProcess() {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    if (this.transport) {
+      try { this.transport.close(); } catch {}
+      this.transport = null;
+    }
+    if (this.child) {
+      try { this.child.kill(); } catch {}
+      this.child = null;
+    }
+    this._clearKeepAlive();
+    this._clearLiveness();
+  }
+
+  // ── Keep-alive ──────────────────────────────────────────────────────
+
+  /** Start sending periodic keep_alive frames to the child. */
+  _ensureKeepAlive() {
+    this._clearKeepAlive();
+    this._keepAliveTimer = setInterval(() => {
+      if (this._state !== STATE.CONNECTED || !this.transport) return;
+      this.transport.write({ type: 'keep_alive' }).catch(() => {});
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  /** Stop keep-alive timer. */
+  _clearKeepAlive() {
+    if (this._keepAliveTimer) {
+      clearInterval(this._keepAliveTimer);
+      this._keepAliveTimer = null;
+    }
+  }
+
+  // ── Liveness detection ──────────────────────────────────────────────
+
+  /** Reset the liveness timeout (call on every inbound message). */
+  _resetLiveness() {
+    this._clearLiveness();
+    this._lastActivityTime = Date.now();
+    this._livenessTimer = setTimeout(() => {
+      this._livenessTimer = null;
+      if (this._state !== STATE.CONNECTED) return;
+      const idle = Date.now() - this._lastActivityTime;
+      process.stderr.write(
+        `[bridge] liveness timeout after ${Math.round(idle / 1000)}s idle — reconnecting\n`,
+      );
+      this._cleanupProcess();
+      this._scheduleReconnect();
+    }, LIVENESS_TIMEOUT_MS);
+  }
+
+  /** Stop liveness timer. */
+  _clearLiveness() {
+    if (this._livenessTimer) {
+      clearTimeout(this._livenessTimer);
+      this._livenessTimer = null;
+    }
   }
 }
