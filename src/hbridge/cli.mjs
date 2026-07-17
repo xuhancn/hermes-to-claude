@@ -5,8 +5,9 @@ import { UserManager } from "./users.mjs";
 import { markRunning, markStopped } from "./state.mjs";
 import { COLORS, log } from "./utils.mjs";
 import { networkInterfaces } from "os";
+import { isHome, homePort } from "./home.mjs";
 
-const PORT = 9190;
+const PORT = isHome() ? homePort(process.cwd()) : 9190;
 let server = null;
 let statusInterval = null;
 
@@ -19,38 +20,47 @@ function getLocalIPs() {
 
 async function cmd_enable(username) {
   const users = new UserManager();
-  
-  if (!username) {
-    process.stdout.write("  Username: ");
-    username = await new Promise(r => {
-      process.stdin.once("data", d => r(d.toString().trim()));
-    });
-  }
 
-  // Reuse existing key if user already exists
-  let key;
-  if (users.list()[username]) {
-    key = users.list()[username].key;
-  } else {
-    key = users.add(username);
-  }
-  const ips = getLocalIPs();
-  
-  console.log(`
-  ╔══════════════════════════════════╗
-  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}             ║
-  ║  Remote access is now allowed    ║
-  ║                                  ║
-  ║  User:   ${username.padEnd(22)}║
-  ║  Key:    ${key.padEnd(22)}║
-  ║  Addr:   127.0.0.1:${PORT}          ║`);
-  for (const ip of ips) {
-    console.log(`  ║          ${ip.padEnd(22)}║`);
-  }
-  console.log(`  ║                                  ║
-  ║  Save this key — shown once      ║
+  if (isHome()) {
+    // Home mode: no auth, no user management needed
+    console.log(`\n  ╔══════════════════════════════════╗
+  ║  hbridge home mode              ║
+  ║  Port: :${PORT}                        ║
   ╚══════════════════════════════════╝
 `);
+  } else {
+    if (!username) {
+      process.stdout.write("  Username: ");
+      username = await new Promise(r => {
+        process.stdin.once("data", d => r(d.toString().trim()));
+      });
+    }
+
+    // Reuse existing key if user already exists
+    let key;
+    if (users.list()[username]) {
+      key = users.list()[username].key;
+    } else {
+      key = users.add(username);
+    }
+    const ips = getLocalIPs();
+
+    console.log(`
+	  ╔══════════════════════════════════╗
+	  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}             ║
+	  ║  Remote access is now allowed    ║
+	  ║                                  ║
+	  ║  User:   ${username.padEnd(22)}║
+	  ║  Key:    ${key.padEnd(22)}║
+	  ║  Addr:   127.0.0.1:${PORT}          ║`);
+    for (const ip of ips) {
+      console.log(`  ║          ${ip.padEnd(22)}║`);
+    }
+    console.log(`  ║                                  ║
+	  ║  Save this key — shown once      ║
+	  ╚══════════════════════════════════╝
+	`);
+  }
 
   server = createServer(users);
   server.listen(PORT);
@@ -153,6 +163,7 @@ else if (cmd === "--status") cmd_status();
 else if (cmd === "--user") cmd_user(sub, val);
 else if (cmd === "--stdio") { startMcpServer(); }
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
+else if (isHome()) { cmd_enable("local"); }
 else {
   console.log("hbridge — Hermes Bridge");
   console.log("  hbridge --enable [-u user]   Start bridge");
