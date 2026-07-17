@@ -2,7 +2,6 @@
 import { startMcpServer } from "./mcp.mjs";
 import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
-import { COLORS, log } from "./utils.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
 
@@ -22,30 +21,11 @@ async function cmd_enable() {
   const port = homePort(cwd);
   const key = homeKey(cwd);
   const ips = getLocalIPs();
+  const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
 
-  if (isHome()) {
-    console.log(`\n  ╔════════════════════════════════════════════╗
-  ║  hbridge home mode    ${HBRIDGE_VERSION.padEnd(19)}  ║
-  ║  Addr:  127.0.0.1:${String(port).padEnd(5)}${' '.repeat(20)}║
-  ║  Key:   ${key.padEnd(36)}║
-  ╚════════════════════════════════════════════╝
-`);
-  } else {
-    console.log(`
-  ╔════════════════════════════════════════════╗
-  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}   ${HBRIDGE_VERSION.padEnd(19)}  ║
-  ║  Remote access is now allowed             ║
-  ║                                            ║
-  ║  Key:    ${key.padEnd(35)}║
-  ║  Addr:   127.0.0.1:${String(port).padEnd(5)}${' '.repeat(19)}║`);
-    for (const ip of ips) {
-      console.log(`  ║         ${(ip + ":" + port).padEnd(35)}║`);
-    }
-    console.log(`  ║                                            ║
-  ║  Save this key — shown once                ║
-  ╚════════════════════════════════════════════╝
-`);
-  }
+  console.log("hbridge enabled");
+  console.log("📂 " + cwd);
+  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
 
   server = createServer(key);
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
@@ -74,25 +54,17 @@ function cmd_disable() {
 }
 
 function cmd_status() {
-  const port = homePort(process.cwd());
-  const key = homeKey(process.cwd());
+  const cwd = process.cwd();
+  const port = homePort(cwd);
+  const key = homeKey(cwd);
   const ips = getLocalIPs();
   const state = readState();
+  const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
+  const running = state.running;
 
-  console.log(`
-  ══════════════════════════
-  hbridge ${HBRIDGE_VERSION}
-  Status:    ${server ? "enabled" : "disabled"}
-  Port:      ${port}
-  Key:       ${key}`);
-  if (ips.length > 0) {
-    console.log(`  LAN:       ${ips.map(ip => ip + ":" + port).join(", ")}`);
-  }
-  if (state.lastClientIP) {
-    console.log(`  Last conn: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`);
-  }
-  console.log(`  ══════════════════════════
-`);
+  console.log(running ? "hbridge enabled" : "hbridge stopped");
+  console.log("📂 " + cwd);
+  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
 }
 
 function showHelp() {
