@@ -1,6 +1,7 @@
 import { createServer as http } from "http";
 import { Bridge } from "./bridge.mjs";
 import { incrementTasks } from "./state.mjs";
+import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 let bridge = new Bridge();
@@ -17,15 +18,17 @@ export function createServer(users) {
       return res.end(JSON.stringify({ status: "ok" }));
     }
 
-    const auth = req.headers["authorization"] || "";
-    const [username, key] = Buffer.from(auth.split(" ")[1] || "", "base64")
-      .toString().split(":");
-    
-    const ok = users.verify(username, key);
-      console.error(`AUTH: user=${username} key=${key} ok=${ok}`);
-      if (!ok) {
-        res.writeHead(401);
-        return res.end("Unauthorized");
+    if (!isHome()) {
+      const auth = req.headers["authorization"] || "";
+      const [username, key] = Buffer.from(auth.split(" ")[1] || "", "base64")
+        .toString().split(":");
+
+      const ok = users.verify(username, key);
+        console.error(`AUTH: user=${username} key=${key} ok=${ok}`);
+        if (!ok) {
+          res.writeHead(401);
+          return res.end("Unauthorized");
+      }
     }
 
     const isPost = req.method === "POST";
