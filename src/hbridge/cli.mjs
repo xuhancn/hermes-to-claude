@@ -7,6 +7,7 @@ import { COLORS, log } from "./utils.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort } from "./home.mjs";
 
+const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
 const PORT = isHome() ? homePort(process.cwd()) : 9190;
 let server = null;
 let statusInterval = null;
@@ -23,10 +24,14 @@ async function cmd_enable(username) {
 
   if (isHome()) {
     // Home mode: no auth, no user management needed
+    const ips = getLocalIPs();
     console.log(`\n  ╔══════════════════════════════════╗
-  ║  hbridge home mode              ║
-  ║  Port: :${PORT}                        ║
-  ╚══════════════════════════════════╝
+  ║  hbridge home mode   ${HBRIDGE_VERSION}  ║
+  ║  Port: :${PORT}                        ║`);
+    for (const ip of ips) {
+      console.log(`  ║  LAN:  ${(ip + ":" + PORT).padEnd(22)}║`);
+    }
+    console.log(`  ╚══════════════════════════════════╝
 `);
   } else {
     if (!username) {
@@ -46,20 +51,20 @@ async function cmd_enable(username) {
     const ips = getLocalIPs();
 
     console.log(`
-	  ╔══════════════════════════════════╗
-	  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}             ║
-	  ║  Remote access is now allowed    ║
-	  ║                                  ║
-	  ║  User:   ${username.padEnd(22)}║
-	  ║  Key:    ${key.padEnd(22)}║
-	  ║  Addr:   127.0.0.1:${PORT}          ║`);
+  ╔══════════════════════════════════╗
+  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}   ${HBRIDGE_VERSION}  ║
+  ║  Remote access is now allowed    ║
+  ║                                  ║
+  ║  User:   ${username.padEnd(22)}║
+  ║  Key:    ${key.padEnd(22)}║
+  ║  Addr:   127.0.0.1:${PORT}          ║`);
     for (const ip of ips) {
-      console.log(`  ║          ${ip.padEnd(22)}║`);
+      console.log(`  ║         ${(ip + ":" + PORT).padEnd(22)}║`);
     }
     console.log(`  ║                                  ║
-	  ║  Save this key — shown once      ║
-	  ╚══════════════════════════════════╝
-	`);
+  ║  Save this key — shown once      ║
+  ╚══════════════════════════════════╝
+`);
   }
 
   server = createServer(users);
@@ -86,12 +91,17 @@ function cmd_disable() {
 
 function cmd_status() {
   const users = new UserManager();
+  const ips = getLocalIPs();
   console.log(`
   ══════════════════════════
+  hbridge ${HBRIDGE_VERSION}
   Status:    ${server ? "enabled" : "disabled"}
   Port:      ${PORT}
-  Users:     ${Object.keys(users.list()).length}
-  ══════════════════════════
+  Users:     ${Object.keys(users.list()).length}`);
+  if (ips.length > 0) {
+    console.log(`  LAN:       ${ips.map(ip => ip + ":" + PORT).join(", ")}`);
+  }
+  console.log(`  ══════════════════════════
 `);
   const list = users.list();
   for (const [name, info] of Object.entries(list)) {
