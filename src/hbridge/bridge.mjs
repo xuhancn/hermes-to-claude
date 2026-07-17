@@ -75,6 +75,10 @@ export class Bridge {
     /** @type {Map<string, { lastText: string }>} */
     this._msgTextProgress = new Map();
 
+    // ── Session tracking ──
+    /** @type {string|undefined} */
+    this._sessionId = undefined;
+
     // ── Multi-turn auto-respond ──
     this._autoRespondCount = 0;
     this._maxAutoRespond = 5;
@@ -198,7 +202,18 @@ export class Bridge {
         this.currentTask.result += delta;
         this._emitTaskChunk(this.currentTask.id, delta);
       }
-      return; // stream_event is never a completion signal
+      return;
+    }
+
+    // ── keep_alive: bidirectional heartbeat ────────────────────────
+    if (msg.type === "keep_alive") {
+      return; // nothing to do; liveness timer was already reset
+    }
+
+    // ── system/init: extract session info ──────────────────────────
+    if (msg.type === "system" && msg.subtype === "init") {
+      this._sessionId = /** @type {string|undefined} */ (msg.session_id);
+      return;
     }
 
     // ── Progressive streaming ──────────────────────────────────────
