@@ -188,6 +188,19 @@ export class Bridge {
 
     if (!this.currentTask) return;
 
+    // ── stream_event: progressive text deltas ──────────────────────
+    // Claude Code emits stream_event messages with incremental text,
+    // followed by a final assistant message (full snapshot) and result.
+    if (msg.type === "stream_event") {
+      const event = /** @type {any} */ (msg.event);
+      if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
+        const delta = /** @type {string} */ (event.delta.text);
+        this.currentTask.result += delta;
+        this._emitTaskChunk(this.currentTask.id, delta);
+      }
+      return; // stream_event is never a completion signal
+    }
+
     // ── Progressive streaming ──────────────────────────────────────
     // Claude Code sends the FULL content array in each update (same message.id).
     // Track per-message progress to extract only the delta text.
@@ -241,8 +254,11 @@ export class Bridge {
     }
 
     // ── Completion signals ─────────────────────────────────────────
-    if (msg.stop_reason || msg.type === "result" || msg.subtype === "success") {
-      this._finishTask(0);
+    if (msg.stop_reason || msg.type === "result") {
+      // Official error subtypes: error_during_execution, error_max_turns,
+      // error_max_budget_usd, error_max_structured_output_retries
+      const isError = typeof msg.subtype === "string" && msg.subtype.startsWith("error_");
+      this._finishTask(isError ? 1 : 0);
     }
   }
 
