@@ -8,13 +8,27 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
                                           stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
 
-## Why hbridge
+## Advanced of hbridge
 
-- **Leverages Claude Code's built-in security** — Auto Mode protects your filesystem
-- **Simple auth** — `hb_XXXX-XXXX` keys, no SSH key pairs
-- **Zero external API** — local-only, no Anthropic subscription needed
-- **Default-off** — no attack surface when disabled
-- **Cross-platform** — Windows / Linux / macOS
+### Leverages Claude Code's built-in security
+
+hbridge delegates all file operations to Claude Code's permission system. Hermes never touches your filesystem directly — Claude Code's Auto Mode prompts for consent before every read/write. No blind file access, no sandbox bypass.
+
+### Simple auth
+
+One-time key generation via `hbridge --enable`. Keys use `hb_XXXX-XXXX` format built from 8 Base52 characters (`crypto.randomBytes()`), providing ~45.6 bits of entropy. No SSH setup, no certificate management, no OAuth — just a key.
+
+### Zero external API
+
+Everything runs on localhost. No cloud dependency, no API keys to manage, no data ever leaves your machine. Works fully offline with no Anthropic subscription or external service required.
+
+### Default-off
+
+hbridge starts in stopped state. The HTTP server only listens after explicit `--enable` (or the `hbridge_enable` MCP tool call in Claude Code). When disabled, zero ports open — no attack surface.
+
+### Cross-platform
+
+Single codebase tested on Windows 10/11, Linux (Ubuntu 22+), and macOS. Windows uses `cmd.exe /d /s /c npx.cmd` for spawn; Linux and macOS use `npx` directly. Same install experience everywhere.
 
 ## Prerequisites
 
