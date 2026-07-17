@@ -16,6 +16,31 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
 - **Default-off** — no attack surface when disabled
 - **Cross-platform** — Windows / Linux / macOS
 
+## Prerequisites
+
+Install **Node.js 22+** if you don't have it yet:
+
+**Linux (Ubuntu/Debian)**
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+**macOS**
+```bash
+brew install node@22
+```
+
+**Windows**
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+Verify it's installed:
+```bash
+node --version   # v22.x.x
+```
+
 ## Quick Start
 
 ```bash
