@@ -64,7 +64,7 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable xu` | Start HTTP server on :9190, generate access key |
+| `hbridge --enable <user>` | Start HTTP server on :9190, generate access key |
 | `hbridge --disable` | Stop server |
 | `hbridge --status` | Show server status |
 | `hbridge --user add <name>` | Add a new user |
@@ -93,7 +93,7 @@ Add to `~/.hermes/config.yaml`:
 hbridge:
   dev:
     addr: 192.168.27.243:9190
-    user: xu
+    user: <username>
     key: hb_XXXX-XXXX    # shown once on --enable
 ```
 
@@ -143,7 +143,7 @@ Hermes                          hbridge:9190                    Claude Code (per
 ### Quick Check (curl)
 
 ```bash
-BASE64=$(echo -n "xu:hb_XXXX-XXXX" | base64)
+BASE64=$(echo -n "<username>:hb_XXXX-XXXX" | base64)
 curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
 # → {"status":"ok"}
 ```
@@ -154,7 +154,7 @@ curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
 import requests, base64, time, json
 
 ADDR = "192.168.27.243:9190"
-AUTH = base64.b64encode(b"xu:hb_XXXX-XXXX").decode()
+AUTH = base64.b64encode(b"<username>:hb_XXXX-XXXX").decode()
 HEADERS = {"Authorization": f"Basic {AUTH}"}
 
 # Create task
