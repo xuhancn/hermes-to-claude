@@ -70,14 +70,13 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable <user>` | Start HTTP server on :9190, generate access key |
+| `hbridge --enable` | Start server with dir-derived key (port 9200–9799) |
 | `hbridge --disable` | Stop server |
-| `hbridge --status` | Show server status |
-| `hbridge --user add <name>` | Add a new user |
-| `hbridge --user list` | List all users |
+| `hbridge --status` | Show server status + last client connection |
 | `hbridge --stdio` | Run as MCP server (stdin/stdout) |
 
-All endpoints except `/health` require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
+Port and key are derived deterministically from the working directory.
+All endpoints except `/health` require the key via **HTTP Basic Auth** (`user:hb_xxxx` base64-encoded).
 
 ### Cross-Platform
 
