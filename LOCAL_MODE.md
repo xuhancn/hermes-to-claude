@@ -1,6 +1,17 @@
 # hbridge Local Mode — Design
 
-Hermes + Claude 本地零配置协作模式。
+> **⚠️ EXPERIMENTAL** — 设计阶段，待实施。API 可能变动。
+
+Hermes + Claude 本地零配置协作。区别于 remote 模式（需要手动 `enable` + 认证），local 模式**自动打开、免认证、随 Claude 生命周期自动启停**。
+
+## 设计动机
+
+通用 AI agent (Hermes) 记不住领域细节——经验锁在 skill 文件里。hbridge local mode 让 Hermes 只管调度，把 skill/脚本/工作流全部丢给 Claude 执行。Claude 专注一件事，无记忆污染。
+
+```
+Hermes → 算端口 → 连 localhost → 发 task + skill → 看结果
+Claude → 读 CLAUDE.md → 加载 skill → 执行 → 返回
+```
 
 ## 触发
 
@@ -8,7 +19,7 @@ Hermes + Claude 本地零配置协作模式。
 HBRIDGE_LOCAL=1 node dist/hbridge.mjs --stdio
 ```
 
-或写入 `~/.claude.json`：
+Claude MCP 配置自动注入环境变量：
 
 ```json
 {
@@ -22,12 +33,14 @@ HBRIDGE_LOCAL=1 node dist/hbridge.mjs --stdio
 }
 ```
 
-## 行为
+## 行为差异
 
-| 模式 | 认证 | 端口 | 生命周期 |
-|------|------|------|----------|
-| remote | 需要 Basic Auth | 固定 9190 | 手动 enable/disable |
-| **local** | **免认证** | **hash(cwd)** | **Claude 启动即开，退出即关** |
+| | remote 模式 | local 模式 |
+|------|------------|-----------|
+| 启动 | 手动 `enable hbridge` | **自动打开** |
+| 认证 | Basic Auth 必须 | **免认证** (127.0.0.1) |
+| 端口 | 固定 9190 | **hash(cwd)** |
+| 生命周期 | 手动 disable | **Claude 退出即关** |
 
 ## 端口映射
 
@@ -35,57 +48,19 @@ HBRIDGE_LOCAL=1 node dist/hbridge.mjs --stdio
 port = 9200 + (md5(cwd)[0:2] % 600)
 ```
 
-| 工作目录 | MD5 首 2 字节 | 端口 |
-|----------|--------------|------|
-| `~/tasks/pre-market-recap/` | `a3f2` | port 9268 |
-| `~/tasks/post-market-recap/` | `d81e` | port 9518 |
-| `~/pytorch/` | `5c0e` | port 9321 |
+每个工作目录固定端口。Hermes 按同样算法算端口后直连。
 
-**Hermes 侧计算相同的 port**，直连 `http://localhost:<port>/v1/task/create`。
+## 实现要点
 
-## 多任务并行
-
-每个 Claude 实例绑定一个工作目录 → 独立端口 → 互不冲突：
-
-```
-目录 A → port 9268 → Claude A → 做盘前复盘
-目录 B → port 9518 → Claude B → 做 PyTorch build
-```
-
-## Hermes 连接流程
-
-```python
-import hashlib
-
-def hbridge_port(cwd):
-    h = hashlib.md5(cwd.encode()).digest()
-    return 9200 + ((h[0] << 8 | h[1]) % 600)
-
-# 发送任务
-port = hbridge_port("/home/xu/tasks/pre-market-recap")
-requests.post(f"http://localhost:{port}/v1/task/create",
-              json={"prompt": "盘前分析"})
-```
+1. 检测 `HBRIDGE_LOCAL=1` → 自动启动 HTTP server（无需 `enable`）
+2. 认证中间件：`if HBRIDGE_LOCAL` → skip auth
+3. 端口 = hash(cwd)，不固定 9190
+4. `process.on("exit")` → 自动关 server
 
 ## API
 
-与 remote 模式完全一致：
-
-- `GET /health` → `{"status":"ok"}`
-- `POST /v1/task/create` → `{"task_id":"...","status":"created"}`
-- `GET /v1/task/output?task_id=...` → `{"task":{"status":"done","result":"..."}}`
-
-## 目录约定
-
-任务目录结构 (见 [hermes-agent-everything](https://github.com/xuhancn/hermes-agent-everything))：
-
-```
-tasks/<task-name>/
-  CLAUDE.md    ← Claude 启动时加载
-  skills/      ← 任务专用 skills
-  scripts/     ← 任务专用脚本
-```
+与 remote 完全一致 — 只是免 auth 端口不同。
 
 ## 状态
 
-**设计阶段** — 待实施。
+**设计阶段** — 未实施。
