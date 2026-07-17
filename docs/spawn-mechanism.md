@@ -14,7 +14,7 @@ npx @anthropic-ai/claude-code
 
 `--verbose` is required for `stream-json` output to function correctly.
 
-No `--sdk-url` or `--session-id` in local mode — those are for remote WebSocket transport.
+No `--sdk-url` or `--session-id` in the `stream-json` spawn mode — those are for remote WebSocket transport.
 
 ### Cross-Platform
 
@@ -35,7 +35,7 @@ One line per message:
 | Field | Value | Description |
 |-------|-------|-------------|
 | `type` | `"user"` | Message type (SDK protocol) |
-| `session_id` | `""` | Empty for local mode |
+| `session_id` | `""` | Empty for stdio (non-remote) mode |
 | `message.role` | `"user"` | Sender role |
 | `message.content` | free text | The prompt |
 | `parent_tool_use_id` | `null` | No parent tool for top-level messages |

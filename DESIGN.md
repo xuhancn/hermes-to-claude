@@ -38,9 +38,9 @@ Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file de
 Key is `hb_` + 8 random base52 characters — generated once, stored in `~/.hbridge_key`.
 Same key for all directories on one machine. No per-directory derivation.
 
-Both home and remote modes use the same key. The only difference:
-- **Home mode** (HBRIDGE_HOME=1): no auth, localhost-only (`127.0.0.1`)
-- **Remote mode**: auth enforced against the stored key
+Both home and remote modes use the same machine-global key (`~/.hbridge_key`). The differences:
+- **Home mode** (HBRIDGE_HOME=1): no auth, `127.0.0.1` only
+- **Remote mode**: auth enforced against the stored key, listens on all interfaces
 
 ## Port Derivation
 

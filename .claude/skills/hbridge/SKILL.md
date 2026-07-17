@@ -7,7 +7,7 @@ description: Control the Hermes Bridge (hbridge) server — enable, disable, sta
 
 Usage:
 ```
-/hbridge enable               Start hbridge server, show deterministic access key
+/hbridge enable               Start hbridge server, show persistent machine key
 /hbridge disable              Stop hbridge server
 /hbridge status               Show server status + last client connection info
 /hbridge status_bar on        Attach hbridge status to Claude Code status bar
@@ -23,7 +23,7 @@ Parse the args to determine the subcommand. The args string contains space-separ
 
 | Input | MCP tool call | Notes |
 |---|---|---|
-| `enable` | `hbridge_enable()` | Key derived deterministically from cwd |
+| `enable` | `hbridge_enable()` | Key from `~/.hbridge_key` (random, machine-global) |
 | `disable` | `hbridge_disable()` | |
 | `status` | `hbridge_status()` | |
 | `status_bar on` | `hbridge_status_bar({"action":"on"})` | Attach hbridge to existing bar |
@@ -34,7 +34,7 @@ Port and key are derived from the working directory. Home mode (HBRIDGE_HOME=1) 
 
 ### Examples
 
-- `/hbridge enable` → enable with dir-derived key
+- `/hbridge enable` → start server, show persistent machine key
 - `/hbridge status` → show status + last client connection info
 - `/hbridge status_bar on` → attach hbridge to status bar
 
