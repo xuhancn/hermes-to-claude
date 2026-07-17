@@ -17,7 +17,7 @@ Hermes ──HTTP──▶ hbridge:<port> ──stdio──▶ Claude Code (pers
 ## Advanced of hbridge
 
 - **Security**: Hermes never touches your filesystem — all file ops go through Claude Code's Auto Mode permission system. No blind access.
-- **Auth**: Deterministic key `hb_` + base52(MD5(cwd)[4:10]). No storage, no generation step.
+- **Auth**: Random key `hb_` + 8 base52 chars — generated once, stored in `~/.hbridge_key`. Same key for all directories on one machine.
 - **Local-only**: Fully offline. No cloud, no external API, no Anthropic subscription.
 - **Default-off**: Zero ports open until explicit `--enable`. No attack surface when disabled.
 - **Cross-platform**: Windows (cmd.exe), Linux, macOS — single codebase, tested on all three.
@@ -70,12 +70,12 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable` | Start server with dir-derived key (port 9200–9799) |
+| `hbridge --enable` | Start server with persisted random key (port 9200–9799) |
 | `hbridge --disable` | Stop server |
 | `hbridge --status` | Show server status + last client connection |
 | `hbridge --stdio` | Run as MCP server (stdin/stdout) |
 
-Port and key are derived deterministically from the working directory.
+Port is derived deterministically from cwd. Key is random, generated once and persisted in `~/.hbridge_key` (machine-global — same key for all directories).
 All endpoints except `/health` require the key via **HTTP Basic Auth** (`user:hb_xxxx` base64-encoded).
 
 ### Cross-Platform
@@ -98,7 +98,7 @@ Add to `~/.hermes/config.yaml`:
 hbridge:
   dev:
     addr: 192.168.27.243:<port>    # run hbridge --status for port
-    key: hb_jJTitzkw               # deterministic per directory
+    key: hb_jJTitzkw               # random per-machine, persisted in ~/.hbridge_key
 ```
 
 ### API Endpoints
@@ -152,7 +152,7 @@ curl http://192.168.27.243:<port>/health -H "Authorization: Basic $BASE64"
 # → {"status":"ok"}
 ```
 
-> **Note:** Port and key are derived from the working directory. Run `hbridge --status` to see the correct `PORT` and key. The username portion of Basic auth is ignored — only the key matters.
+> **Note:** Port is derived from the working directory. Key is machine-global (random, persisted in `~/.hbridge_key`). Run `hbridge --status` to see the correct `PORT` and key. The username portion of Basic auth is ignored — only the key matters.
 
 ### Python SDK Example
 
@@ -186,7 +186,7 @@ while True:
 ### Security
 
 - **Default-off**: User must run `hbridge --enable` (or `/mcp hbridge enable` in Claude Code) before Hermes can connect. No attack surface when disabled.
-- **Deterministic key**: Single key per directory (`hb_` + base52(MD5(cwd)[4:10])). Same directory = same key, every time. No user management, no storage needed.
+- **Persistent key**: Random `hb_` + 8 base52 chars — generated once, stored in `~/.hbridge_key` (machine-global). Same key for all directories on one machine. No user management.
 - **Auth for remote, skip for home**: When `HBRIDGE_HOME=1`, auth is skipped (localhost-only). Without it, auth is enforced for all endpoints except `/health`.
 - **Local-only**: No external API, no data leaves the machine.
 
@@ -206,7 +206,7 @@ hbridge auto-registers as an MCP server on `npm install` (via postinstall):
 
 | Tool | Description |
 |------|-------------|
-| `hbridge_enable` | Start hbridge HTTP server, show deterministic key |
+| `hbridge_enable` | Start hbridge HTTP server, show server key |
 | `hbridge_disable` | Stop hbridge |
 | `hbridge_status` | Show server status + last client connection info |
 
