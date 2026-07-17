@@ -3,7 +3,7 @@
 Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persistent JSON-RPC process — **no Pro/Max subscription required**.
 
 ```
-Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print --verbose)
+Hermes ──HTTP──▶ hbridge:<port> ──stdio──▶ Claude Code (persistent --print --verbose)
   (remote)                  (NDJSON)      stdin: {"type":"user","session_id":"","message":{"role":"user","content":"fix bug"},"parent_tool_use_id":null}
                                           stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
@@ -17,7 +17,7 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
 ## Advanced of hbridge
 
 - **Security**: Hermes never touches your filesystem — all file ops go through Claude Code's Auto Mode permission system. No blind access.
-- **Auth**: One-time `--enable` generates `hb_XXXX-XXXX` key (Base52, ~45.6-bit entropy). No SSH, no OAuth.
+- **Auth**: Deterministic key `hb_` + base52(MD5(cwd)[4:10]). No storage, no generation step.
 - **Local-only**: Fully offline. No cloud, no external API, no Anthropic subscription.
 - **Default-off**: Zero ports open until explicit `--enable`. No attack surface when disabled.
 - **Cross-platform**: Windows (cmd.exe), Linux, macOS — single codebase, tested on all three.
@@ -25,7 +25,7 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
 ## 1. Design Framework
 
 ```
-Phone / MCP Client  ──▶  Hermes Agent  ──HTTP──▶  hbridge :9190  ──stdio──▶  Claude Code (persistent)
+Phone / MCP Client  ──▶  Hermes Agent  ──HTTP──▶  hbridge :<port>  ──stdio──▶  Claude Code (persistent)
                       (task orchestration)       │                              │
                                                   │  mcp.mjs (HTTP + MCP)       │  reads CLAUDE.md
                                                   │  bridge.mjs (process mgr)   │  loads skills
@@ -70,14 +70,13 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable <user>` | Start HTTP server on :9190, generate access key |
+| `hbridge --enable` | Start server with dir-derived key (port 9200–9799) |
 | `hbridge --disable` | Stop server |
-| `hbridge --status` | Show server status |
-| `hbridge --user add <name>` | Add a new user |
-| `hbridge --user list` | List all users |
+| `hbridge --status` | Show server status + last client connection |
 | `hbridge --stdio` | Run as MCP server (stdin/stdout) |
 
-All endpoints except `/health` require **HTTP Basic Auth** (`user:hb_XXXX-XXXX` base64-encoded).
+Port and key are derived deterministically from the working directory.
+All endpoints except `/health` require the key via **HTTP Basic Auth** (`user:hb_xxxx` base64-encoded).
 
 ### Cross-Platform
 
@@ -98,9 +97,8 @@ Add to `~/.hermes/config.yaml`:
 ```yaml
 hbridge:
   dev:
-    addr: 192.168.27.243:9190
-    user: <username>
-    key: hb_XXXX-XXXX    # shown once on --enable
+    addr: 192.168.27.243:<port>    # run hbridge --status for port
+    key: hb_jJTitzkw               # deterministic per directory
 ```
 
 ### API Endpoints
@@ -115,7 +113,7 @@ hbridge:
 ### Task Lifecycle
 
 ```
-Hermes                          hbridge:9190                    Claude Code (persistent)
+Hermes                          hbridge:<port>                    Claude Code (persistent)
   │                                │                                │
   │  POST /v1/task/create          │                                │
   │  {"prompt":"fix bug"}          │                                │
@@ -149,7 +147,7 @@ Hermes                          hbridge:9190                    Claude Code (per
 ### Quick Check (curl)
 
 ```bash
-BASE64=$(echo -n "x:hb_XXXX" | base64)
+BASE64=$(echo -n "x:hb_jJTitzkw" | base64)
 curl http://192.168.27.243:<port>/health -H "Authorization: Basic $BASE64"
 # → {"status":"ok"}
 ```
@@ -162,7 +160,7 @@ curl http://192.168.27.243:<port>/health -H "Authorization: Basic $BASE64"
 import requests, base64, time, json
 
 ADDR = "192.168.27.243:<port>"
-AUTH = base64.b64encode(b"x:hb_XXXX-XXXX").decode()
+AUTH = base64.b64encode(b"x:hb_jJTitzkw").decode()
 HEADERS = {"Authorization": f"Basic {AUTH}"}
 
 # Create task
@@ -188,7 +186,7 @@ while True:
 ### Security
 
 - **Default-off**: User must run `hbridge --enable` (or `/mcp hbridge enable` in Claude Code) before Hermes can connect. No attack surface when disabled.
-- **Deterministic key**: Access key is derived from the working directory (`hb_` + base52(MD5(cwd)[4:10])). Same directory = same key, every time. No storage needed.
+- **Deterministic key**: Single key per directory (`hb_` + base52(MD5(cwd)[4:10])). Same directory = same key, every time. No user management, no storage needed.
 - **Auth for remote, skip for home**: When `HBRIDGE_HOME=1`, auth is skipped (localhost-only). Without it, auth is enforced for all endpoints except `/health`.
 - **Local-only**: No external API, no data leaves the machine.
 
@@ -217,8 +215,7 @@ hbridge auto-registers as an MCP server on `npm install` (via postinstall):
 When hbridge is running, the bottom-right corner shows service status (Claude Code polls ~3-5s):
 
 ```
-▶️ hbridge: on | :9190 | 📨"fix bug"     ← task running
-▶️ hbridge: on | :9190 | ✅"echo hello"  ← task done (exit:0)
+▶️ hbridge: on | :<port>                ← service running
 ⏹️ hbridge: off                           ← service stopped
 ```
 
@@ -227,10 +224,10 @@ When hbridge is running, the bottom-right corner shows service status (Claude Co
 ```bash
 # All tests (plain Node.js, no framework)
 for f in tests/test_*.mjs; do node "$f"; done
-# 354 tests, 7 suites
+# 300 tests, 8 suites
 ```
 
-Note: `test_setup_mcp.mjs` requires Linux paths (stale test, needs update).
+Note: `test_setup_mcp.mjs` requires a `D:\tmp` directory on Windows (pre-existing, unrelated to hbridge).
 
 ## License
 

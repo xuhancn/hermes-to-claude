@@ -27,19 +27,20 @@ Claude Code
 Claude Code polls ~3-5s:
 
 ```
-▶️ hbridge: on | :XXXX | 📨"fix bug"
+▶️ hbridge: on | :<port>
 ⏹️ hbridge: off
 ```
 
-Task info from `~/.hbridge_state.json.latestTask`, written by Bridge on each state change.
+Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file dependency, so it always reflects actual server state for the current directory's deterministic port.
 
 ## Key Format & Derivation
 
-Key is `hb_` + base52(MD5(cwd)[4:10]) — deterministic per directory, no storage needed.
+Key is `hb_` + 8 random base52 characters — generated once, stored in `~/.hbridge_key`.
+Same key for all directories on one machine. No per-directory derivation.
 
-Both home and remote modes use the same derivation. The only difference:
+Both home and remote modes use the same key. The only difference:
 - **Home mode** (HBRIDGE_HOME=1): no auth, localhost-only (`127.0.0.1`)
-- **Remote mode**: auth enforced against the deterministic key
+- **Remote mode**: auth enforced against the stored key
 
 ## Port Derivation
 
@@ -57,7 +58,7 @@ Timeout: 5 minutes per task. On timeout, task is marked "failed" and queue advan
 ### Runtime (gitignored)
 | File | Purpose |
 |------|---------|
-| `~/.hbridge_state.json` | running/stopped flag + port + latestTask + lastClientIP |
+| `~/.hbridge_state.json` | running/stopped flag + port + lastClientIP/lastActiveAt (written by server, read by MCP tools) |
 
 ### Config (written by postinstall)
 | File | Purpose |

@@ -1,6 +1,13 @@
-// Test users.mjs — single-key deterministic verification
+// Test users.mjs — single random key persisted in ~/.hbridge_key
+import { unlinkSync, existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import { verifyKey } from "../src/hbridge/users.mjs";
 import { homeKey } from "../src/hbridge/home.mjs";
+
+const KEY_FILE = join(homedir(), ".hbridge_key");
+// Remove any pre-existing key file so we test fresh generation
+if (existsSync(KEY_FILE)) unlinkSync(KEY_FILE);
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -8,31 +15,34 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-const testCwd = process.cwd();
-const derivedKey = homeKey(testCwd);
+const testKey = homeKey(process.cwd());
 
 // 1. Key format
-assert(derivedKey.startsWith("hb_"), `Key starts with hb_: ${derivedKey}`);
-assert(derivedKey.length > 3, `Key has content after hb_: length=${derivedKey.length}`);
+assert(testKey.startsWith("hb_"), `Key starts with hb_: ${testKey}`);
+assert(testKey.length > 3, `Key has content after hb_: length=${testKey.length}`);
 
-// 2. verifyKey match
-assert(verifyKey(testCwd, derivedKey), "verifyKey matches own key");
+// 2. Key file was created
+assert(existsSync(KEY_FILE), "~/.hbridge_key file created");
+const fileContent = readFileSync(KEY_FILE, "utf8").trim();
+assert(fileContent === testKey, "file content matches homeKey() return");
 
-// 3. verifyKey mismatch
-assert(!verifyKey(testCwd, derivedKey + "x"), "wrong key rejected");
-assert(!verifyKey(testCwd, "hb_WRONG"), "garbage rejected");
+// 3. verifyKey match
+assert(verifyKey(process.cwd(), testKey), "verifyKey matches own key");
 
-// 4. Deterministic — same cwd → same key
-assert(homeKey(testCwd) === derivedKey, "deterministic: same cwd same key");
+// 4. verifyKey mismatch
+assert(!verifyKey(process.cwd(), testKey + "x"), "wrong key rejected");
+assert(!verifyKey(process.cwd(), "hb_WRONG"), "garbage rejected");
 
-// 5. Different cwd → different key
-const otherKey = homeKey("/tmp/some-other-dir");
-assert(derivedKey !== otherKey, "different cwd different key");
-assert(otherKey.startsWith("hb_"), "other key starts with hb_");
+// 5. Same key for different cwd (machine-global)
+const sameKey = homeKey("/tmp/some-other-dir");
+assert(sameKey === testKey, "same key for different cwd — machine-global");
 
-// 6. Verify that substring [4:10] of md5 is used (check key length consistency)
-const anotherKey = homeKey("/another/test/path");
-assert(anotherKey.startsWith("hb_"), "another key starts with hb_");
+// 6. Idempotent: calling again returns same key from file
+const againKey = homeKey("/another/test/path");
+assert(againKey === testKey, "idempotent: same key from file");
+
+// Cleanup test key file
+if (existsSync(KEY_FILE)) unlinkSync(KEY_FILE);
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
