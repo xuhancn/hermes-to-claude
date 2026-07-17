@@ -45,6 +45,7 @@ try {
   }
 
   settings.statusLine = settings.statusLine || {};
+  settings.statusLine.type = "command";
   // Only overwrite if the current command is NOT already our statusline
   // (preserves user-customized statusLine that happens to be the same)
   if (settings.statusLine.command !== cmd) {
