@@ -85,6 +85,8 @@ export class Bridge {
     // ── Session tracking ──
     /** @type {string|undefined} */
     this._sessionId = undefined;
+    /** @type {string|undefined} */
+    this._cwd = undefined;
 
     // ── Multi-turn auto-respond ──
     this._autoRespondCount = 0;
