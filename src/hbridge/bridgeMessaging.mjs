@@ -175,3 +175,57 @@ export function handleIngressMessage(
   // Forward to the registered handler
   onMessage?.(msg);
 }
+
+// ─── FlushGate (write-ordering gate) ─────────────────────────────────
+
+/**
+ * Gates message writes during the initial history flush to prevent
+ * ordering races where new messages arrive interleaved with history.
+ *
+ * @template T
+ */
+export class FlushGate {
+  constructor() {
+    /** @type {boolean} */
+    this.active = false;
+    /** @type {T[]} */
+    this.buffer = [];
+  }
+
+  start() { this.active = true; }
+
+  /**
+   * Stop gating and return buffered messages.
+   * @returns {T[]}
+   */
+  end() {
+    const buf = this.buffer;
+    this.buffer = [];
+    this.active = false;
+    return buf;
+  }
+
+  /**
+   * Enqueue item(s). If gate is active, buffers and returns true.
+   * If not active, returns false (caller sends directly).
+   * @param {...T} items
+   * @returns {boolean}
+   */
+  enqueue(...items) {
+    if (this.active) {
+      this.buffer.push(...items);
+      return true;
+    }
+    return false;
+  }
+
+  /** Discard buffered messages and return count. */
+  drop() {
+    const n = this.buffer.length;
+    this.buffer = [];
+    return n;
+  }
+
+  /** Deactivate without losing buffer (preserved for next end()). */
+  deactivate() { this.active = false; }
+}
