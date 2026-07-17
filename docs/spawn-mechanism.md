@@ -1,7 +1,6 @@
 # Spawn Mechanism — Persistent Claude Code Process
 
-> Sources: Adapted from `NOTES_OFFICIAL_BRIDGE.md`, `DESIGN.md`, and upstream
-> `src/sessionRunner.ts` + `src/types.ts` (official Anthropic bridge).
+> Adapted from upstream `src/sessionRunner.ts` + `src/types.ts` (official Anthropic bridge).
 
 ## Spawn Command
 
@@ -64,12 +63,3 @@ Task is marked done when **any** of these appear in a stdout message:
 - `msg.stop_reason` is set (Claude API turn complete)
 - `msg.type === "result"` (MCP format)
 - `msg.subtype === "success"` (MCP result format)
-
-## Key Differences Applied (PR #14)
-
-| Item | Before PR #14 | After PR #14 |
-|------|---------------|--------------|
-| `--verbose` | Missing | Added (required) |
-| stdin format | `{type:"user", message:{content:"..."}}` | `{type:"user", session_id:"", message:{role:"user", content:"..."}, parent_tool_use_id:null}` |
-| Content parse | `msg.message?.content` only | `msg.content \|\| msg.message?.content` (both formats) |
-| Completion | `msg.type==="result" && subtype==="success"` | `stop_reason \|\| type==="result" \|\| subtype==="success"` |
