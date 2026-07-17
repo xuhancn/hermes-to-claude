@@ -114,6 +114,14 @@ Hermes                          hbridge:9190                    Claude Code (per
   │◀──────────────────────────────│                                │
 ```
 
+### Quick Check (curl)
+
+```bash
+BASE64=$(echo -n "xu:hb_XXXX-XXXX" | base64)
+curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
+# → {"status":"ok"}
+```
+
 ### Python SDK Example
 
 ```python
@@ -142,6 +150,12 @@ while True:
         break
     time.sleep(3)
 ```
+
+### Security
+
+- **Default-off**: User must run `hbridge --enable` (or `/mcp hbridge enable` in Claude Code) before Hermes can connect. No attack surface when disabled.
+- **Key once**: Access key (`hb_XXXX-XXXX`) is shown once on `--enable`. User dictates the key to the Hermes agent operator.
+- **Local-only**: Auth required for all endpoints except `/health`. No external API dependency.
 
 ## Claude Code Integration
 
@@ -230,3 +244,13 @@ Note: `test_setup_mcp.mjs` requires Linux paths (stale test, needs update).
 ## License
 
 MIT
+
+## Reference Documents
+
+| Document | Description |
+|----------|-------------|
+| [docs/spawn-mechanism.md](docs/spawn-mechanism.md) | Persistent Claude process spawn protocol (stdin/ stdout / completion detection) |
+| [docs/mcp-spec.md](docs/mcp-spec.md) | MCP protocol spec mapping to hbridge implementation |
+| [docs/local-mode.md](docs/local-mode.md) | Home Local Mode (HBRIDGE_HOME) design — zero-config local setup |
+| [docs/optimization.md](docs/optimization.md) | Optimization ideas and known issues |
+| [DESIGN.md](DESIGN.md) | Architecture, key format, task queuing, configuration files |
