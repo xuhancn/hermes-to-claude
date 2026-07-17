@@ -149,18 +149,20 @@ Hermes                          hbridge:9190                    Claude Code (per
 ### Quick Check (curl)
 
 ```bash
-BASE64=$(echo -n "<username>:hb_XXXX-XXXX" | base64)
-curl http://192.168.27.243:9190/health -H "Authorization: Basic $BASE64"
+BASE64=$(echo -n "x:hb_XXXX" | base64)
+curl http://192.168.27.243:<port>/health -H "Authorization: Basic $BASE64"
 # → {"status":"ok"}
 ```
+
+> **Note:** Port and key are derived from the working directory. Run `hbridge --status` to see the correct `PORT` and key. The username portion of Basic auth is ignored — only the key matters.
 
 ### Python SDK Example
 
 ```python
 import requests, base64, time, json
 
-ADDR = "192.168.27.243:9190"
-AUTH = base64.b64encode(b"<username>:hb_XXXX-XXXX").decode()
+ADDR = "192.168.27.243:<port>"
+AUTH = base64.b64encode(b"x:hb_XXXX-XXXX").decode()
 HEADERS = {"Authorization": f"Basic {AUTH}"}
 
 # Create task
@@ -186,8 +188,9 @@ while True:
 ### Security
 
 - **Default-off**: User must run `hbridge --enable` (or `/mcp hbridge enable` in Claude Code) before Hermes can connect. No attack surface when disabled.
-- **Key once**: Access key (`hb_XXXX-XXXX`) is shown once on `--enable`. User dictates the key to the Hermes operator. Keys use 8 Base52 characters (`crypto.randomBytes()`), ~45.6 bits of entropy.
-- **Local-only**: Auth required for all endpoints except `/health`. No external API, no data leaves the machine.
+- **Deterministic key**: Access key is derived from the working directory (`hb_` + base52(MD5(cwd)[4:10])). Same directory = same key, every time. No storage needed.
+- **Auth for remote, skip for home**: When `HBRIDGE_HOME=1`, auth is skipped (localhost-only). Without it, auth is enforced for all endpoints except `/health`.
+- **Local-only**: No external API, no data leaves the machine.
 
 ## Claude Code Integration
 
@@ -205,11 +208,9 @@ hbridge auto-registers as an MCP server on `npm install` (via postinstall):
 
 | Tool | Description |
 |------|-------------|
-| `hbridge_enable` | Start hbridge HTTP server, generate key |
+| `hbridge_enable` | Start hbridge HTTP server, show deterministic key |
 | `hbridge_disable` | Stop hbridge |
-| `hbridge_status` | Show server status + recent Hermes tasks |
-| `hbridge_user_add` | Add a user |
-| `hbridge_user_list` | List all users |
+| `hbridge_status` | Show server status + last client connection info |
 
 ### Status Bar
 

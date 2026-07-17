@@ -1,18 +1,16 @@
 ---
 name: hbridge
-description: Control the Hermes Bridge (hbridge) server — enable, disable, status, user management
+description: Control the Hermes Bridge (hbridge) server — enable, disable, status
 ---
 
 # /hbridge — Hermes Bridge Control
 
 Usage:
 ```
-/hbridge enable [user]       Start hbridge server, generate/show access key
-/hbridge disable             Stop hbridge server
-/hbridge status              Show server status + user list
-/hbridge user add <name>     Add a new user + generate key
-/hbridge user list           List all users with creation dates
-/hbridge help                Show this help
+/hbridge enable               Start hbridge server, show deterministic access key
+/hbridge disable              Stop hbridge server
+/hbridge status               Show server status + last client connection info
+/hbridge help                 Show this help
 ```
 
 ## Instructions
@@ -23,25 +21,20 @@ Parse the args to determine the subcommand. The args string contains space-separ
 
 | Input | MCP tool call | Notes |
 |---|---|---|
-| `enable [user]` | `hbridge_enable({user: user})` | Default user `"bridge"` if omitted |
+| `enable` | `hbridge_enable()` | Key derived deterministically from cwd |
 | `disable` | `hbridge_disable()` | |
 | `status` | `hbridge_status()` | |
-| `user add <name>` | `hbridge_user_add({name: name})` | `name` is required |
-| `user list` | `hbridge_user_list()` | |
 | `help` or no args | Show help text | |
+
+Port and key are derived from the working directory. Home mode (HBRIDGE_HOME=1) skips auth.
 
 ### Examples
 
-- `/hbridge enable` → enable with default user "bridge"
-- `/hbridge enable xu` → enable as user "xu"
-- `/hbridge user add han` → add new user "han"
-- `/hbridge user list` → list all users
+- `/hbridge enable` → enable with dir-derived key
+- `/hbridge status` → show status + last client connection info
 
 ### Edge cases
 
 - **No args** → show help text
 - **Unknown subcommand** → show error + help text
-- **`enable` with no user** → use default "bridge" (not an error)
-- **`user add` without name** → show error: missing required name
-- **`user` without subcommand** → show error: expected `add` or `list`
 - **If MCP tool errors** → display the error message to the user

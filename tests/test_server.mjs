@@ -1,6 +1,5 @@
 // Test HTTP server structure — just check exports exist
 import { createServer, startStatusBar } from "../src/hbridge/server.mjs";
-import { UserManager } from "../src/hbridge/users.mjs";
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -8,8 +7,7 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-const users = new UserManager();
-const server = createServer(users);
+const server = createServer("hb_testkey");
 assert(typeof server.listen === "function", "server has listen");
 assert(typeof server.close === "function", "server has close");
 assert(typeof startStatusBar === "function", "startStatusBar exists");

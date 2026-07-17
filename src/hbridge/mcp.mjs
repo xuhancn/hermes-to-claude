@@ -1,9 +1,9 @@
 import http from "http";
 import { randomUUID } from "crypto";
 import { execSync } from "child_process";
-import { UserManager } from "./users.mjs";
 import { Bridge } from "./bridge.mjs";
-import { markRunning, markStopped } from "./state.mjs";
+import { markRunning, markStopped, readState, writeState } from "./state.mjs";
+import { homePort, homeKey } from "./home.mjs";
 
 export function startMcpServer() {
   // Global crash protection — keep MCP alive even if something slips through
@@ -14,7 +14,7 @@ export function startMcpServer() {
     process.stderr.write(`[hbridge] UNHANDLED: ${err}\n`);
   });
 
-  const users = new UserManager();
+  const key = homeKey(process.cwd());
   const bridge = new Bridge();
   let buf = "";
 
@@ -26,7 +26,7 @@ export function startMcpServer() {
       buf = buf.slice(i + 1);
       if (!line) continue;
       try {
-        handleMcp(JSON.parse(line), users, bridge);
+        handleMcp(JSON.parse(line), key, bridge);
       } catch (e) {
         respond({
           jsonrpc: "2.0",
@@ -41,7 +41,7 @@ export function startMcpServer() {
   process.stdin.on("data", () => {});
 }
 
-function handleMcp(msg, users, bridge) {
+function handleMcp(msg, key, bridge) {
   const { method, params, id } = msg;
   if (method === "notifications/initialized") return;
 
@@ -59,27 +59,24 @@ function handleMcp(msg, users, bridge) {
     respond({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
   } else if (method === "tools/call") {
     try {
-      const { name, arguments: args = {} } = params;
+      const { name } = params;
     let t = "";
     if (name === "hbridge_enable") {
-      const uname = args.user || "bridge";
-      const u = users.list();
-      t = u[uname] ? u[uname].key : users.add(uname);
-      // Start HTTP inbox server in this process (stderr → Claude UI)
-      startInboxServer(users, bridge);
-      // Optimistically mark running so statusline picks it up immediately,
-      // without waiting for the async listening event.
-      markRunning(9190, Object.keys(users.list()));
+      const port = homePort(process.cwd());
+      const k = homeKey(process.cwd());
+      startInboxServer(k, bridge);
+      markRunning(port);
+      t = k;
     } else if (name === "hbridge_disable") {
       markStopped();
       t = "disabled";
     } else if (name === "hbridge_status") {
-      t = `hbridge running on :${9190} | Users: ${Object.keys(users.list()).join(", ")}`;
-    } else if (name === "hbridge_user_add") {
-      const ex = users.list();
-      t = ex[args.name] ? ex[args.name].key : users.add(args.name);
-    } else if (name === "hbridge_user_list") {
-      t = JSON.stringify(users.list());
+      const port = homePort(process.cwd());
+      const state = readState();
+      t = `hbridge running on :${port}`;
+      if (state.lastClientIP) {
+        t += ` | Last: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
+      }
     }
     respond({
       jsonrpc: "2.0",
@@ -100,10 +97,11 @@ function handleMcp(msg, users, bridge) {
 
 let inboxServer = null;
 
-function startInboxServer(users, bridge) {
+function startInboxServer(expectedKey, bridge) {
   if (inboxServer && inboxServer.listening) return;
 
-  process.stderr.write("[hbridge] HTTP inbox starting on :9190\n");
+  const port = homePort(process.cwd());
+  process.stderr.write(`[hbridge] HTTP inbox starting on :${port}\n`);
 
   inboxServer = http.createServer((req, res) => {
     try {
@@ -114,17 +112,21 @@ function startInboxServer(users, bridge) {
         return;
       }
 
-      // Auth
-      const auth = req.headers["authorization"] || "";
-      const b64 = auth.split(" ")[1] || "";
-      const [username, key] = Buffer.from(b64, "base64")
-        .toString()
-        .split(":");
-      if (!users.verify(username, key)) {
-        res.writeHead(401);
-        res.end("Unauthorized");
-        return;
+      // Auth (skip in home mode)
+      if (process.env.HBRIDGE_HOME != 1) {
+        const auth = req.headers["authorization"] || "";
+        const providedKey = Buffer.from(auth.split(" ")[1] || "", "base64")
+          .toString().split(":")[1];
+        if (providedKey !== expectedKey) {
+          res.writeHead(401);
+          res.end("Unauthorized");
+          return;
+        }
       }
+
+      // Track connection info
+      const clientIP = req.socket.remoteAddress?.replace(/^::ffff:/, "") || "unknown";
+      writeState({ lastClientIP: clientIP, lastActiveAt: Date.now() });
 
       const [_, v, endpoint, actionRaw] = req.url.split("/");
       const action = actionRaw ? actionRaw.split("?")[0] : "";
@@ -170,21 +172,20 @@ function startInboxServer(users, bridge) {
     }
   });
 
-  // Mark running only after successful listen (avoids race with
-  // statusline liveness check during EADDRINUSE recovery)
+  // Mark running only after successful listen
   inboxServer.on("listening", () => {
-    markRunning(9190, Object.keys(users.list()));
-    process.stderr.write("[hbridge] HTTP inbox listening on :9190\n");
+    markRunning(port);
+    process.stderr.write(`[hbridge] HTTP inbox listening on :${port}\n`);
   });
 
   inboxServer.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
-      process.stderr.write(`[hbridge] Port 9190 in use — killing old process\n`);
+      process.stderr.write(`[hbridge] Port ${port} in use — killing old process\n`);
       inboxServer = null;
-      // Kill the process holding port 9190, then retry
+      // Kill the process holding port, then retry
       try {
         const pid = execSync(
-          `fuser 9190/tcp 2>/dev/null || ss -tlnp 2>/dev/null | grep ":9190" | grep -oP "pid=\\K\\d+"`,
+          `fuser ${port}/tcp 2>/dev/null || ss -tlnp 2>/dev/null | grep ":${port}" | grep -oP "pid=\\K\\d+"`,
           { encoding: "utf8", timeout: 3000 }
         ).trim().split("\n").pop() || "";
         if (pid) {
@@ -192,7 +193,7 @@ function startInboxServer(users, bridge) {
           process.stderr.write(`[hbridge] Killed PID ${pid}\n`);
         }
       } catch { /* fuser/ss unavailable */ }
-      setTimeout(() => startInboxServer(users, bridge), 300);
+      setTimeout(() => startInboxServer(expectedKey, bridge), 300);
       return;
     }
     process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
@@ -200,7 +201,7 @@ function startInboxServer(users, bridge) {
     inboxServer = null;
   });
 
-  inboxServer.listen(9190);
+  inboxServer.listen(port);
 }
 
 // ─── MCP tools ────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ const TOOLS = [
     description: "Start hbridge server and generate access key",
     inputSchema: {
       type: "object",
-      properties: { user: { type: "string" } },
+      properties: {},
     },
   },
   {
@@ -222,20 +223,6 @@ const TOOLS = [
   {
     name: "hbridge_status",
     description: "Show hbridge server status",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "hbridge_user_add",
-    description: "Add a new user",
-    inputSchema: {
-      type: "object",
-      properties: { name: { type: "string" } },
-      required: ["name"],
-    },
-  },
-  {
-    name: "hbridge_user_list",
-    description: "List all users",
     inputSchema: { type: "object", properties: {} },
   },
 ];

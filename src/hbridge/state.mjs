@@ -23,10 +23,11 @@ export const INBOX_FILE = join(homedir(), ".hbridge_inbox.json");
 const DEFAULT_STATE = {
   running: false,
   port: 9190,
-  users: [],
   tasks: 0,
   startedAt: 0,
   updatedAt: 0,
+  lastClientIP: "",
+  lastActiveAt: 0,
 };
 
 export function readState() {
@@ -45,12 +46,12 @@ export function writeState(partial) {
   return next;
 }
 
-export function markRunning(port, users = []) {
-  return writeState({ running: true, port, users, startedAt: Date.now() });
+export function markRunning(port) {
+  return writeState({ running: true, port, startedAt: Date.now() });
 }
 
 export function markStopped() {
-  return writeState({ running: false, port: 9190, users: [], tasks: 0 });
+  return writeState({ running: false, port: 9190, tasks: 0 });
 }
 
 export function incrementTasks() {
