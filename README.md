@@ -38,7 +38,7 @@ Hermes orchestrates tasks. hbridge translates HTTP requests into NDJSON messages
 **Detail references:**
 - [Spawn protocol](docs/spawn-mechanism.md) — Claude spawn command, NDJSON message format, completion detection
 - [MCP spec mapping](docs/mcp-spec.md) — MCP lifecycle, tool definitions, response formats
-- [Home local mode](docs/local-mode.md) — zero-config auto-start mode (experimental)
+- [Home local mode](docs/local-mode.md) — zero-config auto-start mode
 - [Module design](DESIGN.md) — key format, task queuing, state files
 
 ## 2. How to Build from Source
@@ -70,8 +70,8 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable` | Start server with persisted random key (port 9200–9799) |
-| `hbridge --disable` | Stop server |
+| `hbridge --enable` | Start server with deterministic key (auto-starts without flag when `HBRIDGE_HOME=1`) |
+| `hbridge --disable` | Stop server (disabled in home mode) |
 | `hbridge --status` | Show server status + last client connection |
 | `hbridge --stdio` | Run as MCP server (stdin/stdout) |
 
@@ -239,6 +239,6 @@ MIT
 |----------|-------------|
 | [docs/spawn-mechanism.md](docs/spawn-mechanism.md) | Persistent Claude process spawn protocol (stdin/ stdout / completion detection) |
 | [docs/mcp-spec.md](docs/mcp-spec.md) | MCP protocol spec mapping to hbridge implementation |
-| [docs/local-mode.md](docs/local-mode.md) | Home Local Mode (HBRIDGE_HOME) design — zero-config local setup |
+| [docs/local-mode.md](docs/local-mode.md) | Home Local Mode (HBRIDGE_HOME) — zero-config local setup |
 | [docs/optimization.md](docs/optimization.md) | Optimization ideas and known issues |
 | [DESIGN.md](DESIGN.md) | Architecture, key format, task queuing, configuration files |
