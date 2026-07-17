@@ -96,10 +96,10 @@ Add to `~/.hermes/config.yaml`:
 
 ```yaml
 hbridge:
-  dev:
-    addr: 192.168.27.243:<port>    # run hbridge --status for port
-    key: hb_jJTitzkw               # random per-machine, persisted in ~/.hbridge_key
-    cwd: /path/to/project          # working directory for Claude Code tasks
+  machines:
+    - addr: 192.168.27.88:9761
+      key: hb_xxxxxxxx
+      cwd: /absolute/path/to/project
 ```
 
 ### API Endpoints
