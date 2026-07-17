@@ -6,27 +6,32 @@
  * Outputs one line to stdout — the first line is displayed in the
  * bottom-right status bar.
  *
- * Reads hbridge_state.json (written by server.mjs / mcp.mjs)
- * and hbridge_inbox.json (written by MCP tools) to build the status.
+ * Determines the port from the working directory (same deterministic
+ * formula as home.mjs homePort()) and polls the health endpoint.
+ * No state-file dependency — always reflects actual server liveness
+ * for the current directory.
  *
- * When state says "on", also does a quick liveness check via HTTP
- * GET :9190/health. If the server is unreachable (e.g. Claude
- * restarted but state file is stale), falls back to "off" and
- * resets state.
+ * This avoids the v2 port-per-directory issue where state.json
+ * holds a stale port from a different directory or session.
  *
  * Output examples:
- *   hbridge: off
- *   hbridge: on | :9190
- *   hbridge: on | :9190 | 1 pending
+ *   ⏹️ hbridge: off
+ *   ▶️ hbridge: on | :9761
  */
 
-import { readState, writeState } from "./state.mjs";
+import { createHash } from "crypto";
 import http from "http";
 
-/** Quick health check — resolves true if server responds 200. */
+/** Deterministic port matching home.mjs homePort(). */
+function portFromCwd(cwd) {
+  const hash = createHash("md5").update(Buffer.from(cwd, "utf-8")).digest();
+  return 9200 + (hash.readUInt16BE(0) % 600);
+}
+
+/** Quick health check — resolves true if server responds {"status":"ok"}. */
 function livenessCheck(port) {
   return new Promise((resolve) => {
-    const req = http.get(`http://localhost:${port}/health`, (res) => {
+    const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
       let data = "";
       res.on("data", (c) => (data += c.toString()));
       res.on("end", () => {
@@ -40,26 +45,15 @@ function livenessCheck(port) {
 }
 
 async function main() {
-  const state = readState();
-  if (!state.running) {
-    console.log("⏹️ hbridge: off");
-    return;
-  }
+  const port = portFromCwd(process.cwd());
+  const alive = await livenessCheck(port);
 
-  const alive = await livenessCheck(state.port);
   if (!alive) {
-    writeState({ running: false, tasks: 0 });
     console.log("⏹️ hbridge: off");
     return;
   }
 
-  const parts = [`▶️ hbridge: on`, `:${state.port}`];
-  if (state.latestTask) {
-    const icon = state.latestTask.status === "running" ? "📨" : state.latestTask.exitCode === 0 ? "✅" : "❌";
-    const msg = state.latestTask.prompt.replace(/\n/g, " ").slice(0, 30);
-    parts.push(`${icon}"${msg}"`);
-  }
-  console.log(parts.join(" | "));
+  console.log(`▶️ hbridge: on | :${port}`);
 }
 
 main();
