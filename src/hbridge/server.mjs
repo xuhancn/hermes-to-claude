@@ -84,5 +84,9 @@ export function startStatusBar(port) {
     process.stdout.write(`\r  hbridge: on | port: ${port} | ${taskCount} tasks | ↑ ${uptime}min  `);
   }
   render();
-  setInterval(render, 5000);
+  return setInterval(render, 5000);
+}
+
+export function stopStatusBar(intervalId) {
+  clearInterval(intervalId);
 }

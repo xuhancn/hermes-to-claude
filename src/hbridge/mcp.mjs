@@ -68,6 +68,10 @@ function handleMcp(msg, key, bridge) {
       markRunning(port);
       t = k;
     } else if (name === "hbridge_disable") {
+      if (inboxServer) {
+        inboxServer.close();
+        inboxServer = null;
+      }
       markStopped();
       t = "disabled";
     } else if (name === "hbridge_status") {

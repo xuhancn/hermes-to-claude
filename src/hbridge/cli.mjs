@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { startMcpServer } from "./mcp.mjs";
-import { createServer, startStatusBar } from "./server.mjs";
+import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { COLORS, log } from "./utils.mjs";
 import { networkInterfaces } from "os";
@@ -8,6 +8,7 @@ import { isHome, homePort, homeKey } from "./home.mjs";
 
 const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
 let server = null;
+let statusBarInterval = null;
 
 function getLocalIPs() {
   return Object.values(networkInterfaces())
@@ -50,18 +51,26 @@ async function cmd_enable() {
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
 
-  startStatusBar(port);
+  statusBarInterval = startStatusBar(port);
   process.stdin.resume();
 }
 
 function cmd_disable() {
   if (server) {
-    server.close();
-    server = null;
+    server.close(() => {
+      server = null;
+      markStopped();
+      console.log("  hbridge: off");
+      stopStatusBar(statusBarInterval);
+      process.exit(0);
+    });
+    // Fallback: if close hangs, force exit after 1s
+    setTimeout(() => process.exit(0), 1000);
+  } else {
+    markStopped();
+    console.log("  hbridge: off");
+    process.exit(0);
   }
-  markStopped();
-  console.log("  hbridge: off");
-  process.exit(0);
 }
 
 function cmd_status() {
