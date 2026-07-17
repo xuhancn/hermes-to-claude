@@ -38,9 +38,6 @@ export class StdioTransport {
    * @param {object} [opts]
    * @param {number} [opts.maxBatchSize=100] - Max items per stdin write
    * @param {number} [opts.maxQueueSize=10000] - Max pending before backpressure
-   * @param {string} [opts.debugFile] - Debug log path; transcript JSONL is
-   *   placed alongside it as `bridge-transcript-{id}.jsonl`
-   * @param {string} [opts.transcriptLabel] - Short label for transcript filename
    * @param {(err: Error) => void} [opts.onError] - Stderr parse error callback
    */
   constructor(child, opts = {}) {
@@ -59,19 +56,8 @@ export class StdioTransport {
       process.stderr.write(`[StdioTransport] parse error: ${err.message}\n`);
     });
 
-    // Transcript file — raw NDJSON tee for post-hoc analysis
-    /** @type {import('fs').WriteStream|null} */
+    // Transcript stream — opened in connect(), closed in close()
     this._transcriptStream = null;
-    if (opts.debugFile) {
-      const safeId = (opts.transcriptLabel ?? Date.now().toString(36)).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const transcriptPath = join(dirname(opts.debugFile), `bridge-transcript-${safeId}.jsonl`);
-      this._transcriptStream = createWriteStream(transcriptPath, { flags: 'a' });
-      this._transcriptStream.on('error', (err) => {
-        process.stderr.write(`[StdioTransport] transcript error: ${err.message}\n`);
-        this._transcriptStream = null;
-      });
-      process.stderr.write(`[StdioTransport] Transcript: ${transcriptPath}\n`);
-    }
 
     // Write side: SerialBatchEventUploader → child.stdin.write()
     this._uploader = new SerialBatchEventUploader({
@@ -166,8 +152,17 @@ export class StdioTransport {
     if (this._state !== STATE.IDLE) return;
     this._state = STATE.CONNECTED;
 
-    // Wire up stdout NDJSON parser + transcript tee
+    // Wire up stdout NDJSON parser
     this._rl = createInterface({ input: this.child.stdout });
+
+    // Transcript tee — raw NDJSON dump at ~/.hbridge_transcript.jsonl
+    const transcriptPath = join(homedir(), '.hbridge_transcript.jsonl');
+    this._transcriptStream = createWriteStream(transcriptPath, { flags: 'a' });
+    this._transcriptStream.on('error', (err) => {
+      process.stderr.write(`[StdioTransport] transcript error: ${err.message}\n`);
+      this._transcriptStream = null;
+    });
+
     this._rl.on('line', (line) => {
       // Tee raw NDJSON to transcript file (before parse, unfiltered)
       if (this._transcriptStream) {

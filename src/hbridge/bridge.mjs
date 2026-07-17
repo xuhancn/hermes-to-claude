@@ -71,23 +71,15 @@ export class Bridge {
     // Create transport layer — wraps child stdin/stdout
     this.transport = new StdioTransport(this.child);
 
-    // Transcript tee — log first 5 lines for debugging
-    let _stdoutLines = 0;
-
-    // Wire inbound messages
+    // Wire inbound messages — full transcript is recorded by transport's
+    // NDJSON tee at ~/.hbridge_transcript.jsonl
     this.transport.setOnData((line) => {
-      _stdoutLines++;
-      if (_stdoutLines <= 5) {
-        process.stderr.write(`[claude:stdout] ${line.slice(0, 200)}\n`);
-      }
       try {
         const msg = JSON.parse(line);
         if (!this._ready) this._ready = true;
         this._onMessage(msg);
       } catch (e) {
-        if (_stdoutLines <= 5) {
-          process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
-        }
+        process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
       }
     });
 
