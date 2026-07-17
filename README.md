@@ -70,7 +70,7 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable` | Start server with random persistent key (auto-starts without flag when `HBRIDGE_HOME=1`) |
+| `hbridge --enable` | Start server with deterministic key (auto-starts without flag when `HBRIDGE_HOME=1`) |
 | `hbridge --disable` | Stop server (disabled in home mode) |
 | `hbridge --status` | Show server status + last client connection |
 | `hbridge --stdio` | Run as MCP server (stdin/stdout) |
@@ -99,6 +99,7 @@ hbridge:
   dev:
     addr: 192.168.27.243:<port>    # run hbridge --status for port
     key: hb_jJTitzkw               # random per-machine, persisted in ~/.hbridge_key
+    cwd: /path/to/project          # working directory for Claude Code tasks
 ```
 
 ### API Endpoints

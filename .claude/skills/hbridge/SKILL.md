@@ -34,7 +34,7 @@ Port and key are derived from the working directory. Home mode (HBRIDGE_HOME=1) 
 
 ### Examples
 
-- `/hbridge enable` → start server, show persistent machine key
+- `/hbridge enable` → start server, show deterministic access key
 - `/hbridge status` → show status + last client connection info
 - `/hbridge status_bar on` → attach hbridge to status bar
 
