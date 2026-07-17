@@ -44,9 +44,38 @@ export function createServer(expectedKey) {
         let status = 200;
         const payload = body ? JSON.parse(body) : {};
 
-        const [_, v, endpoint, action] = req.url.split("/");
+        const [_, v, endpoint, action, subaction] = req.url.split("/");
 
-        if (endpoint === "task" && action === "create" && isPost) {
+        // --- SSE streaming endpoint ---
+        if (endpoint === "task" && action === "output" && subaction === "stream") {
+          const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
+          if (!taskId) {
+            status = 400;
+            result = { error: "task_id required" };
+          } else {
+            // SSE response — stream chunks to the client
+            res.writeHead(200, {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              "X-Accel-Buffering": "no",
+            });
+            res.write(`data: ${JSON.stringify({ type: "connected", taskId })}\n\n`);
+
+            const subscriber = {
+              write: (data) => {
+                try { res.write(data); } catch { cleanup(); }
+              },
+            };
+            const cleanup = () => {
+              try { bridge.unsubscribeTask(taskId, subscriber); } catch {}
+              try { res.end(); } catch {}
+            };
+            bridge.subscribeTask(taskId, subscriber);
+            req.on("close", cleanup);
+            return; // handled — no response outside handle()
+          }
+        } else if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;
           incrementTasks();
           result = await (async () => bridge.createTask(payload.prompt))();
