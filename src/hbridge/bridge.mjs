@@ -241,6 +241,31 @@ export class Bridge {
       return;
     }
 
+    // ── tool_progress: forward to SSE subscribers ─────────────────
+    if (msg.type === "tool_progress") {
+      const toolName = /** @type {string} */ (msg.tool_name ?? "");
+      const elapsed = /** @type {number} */ (msg.elapsed_time_seconds ?? 0);
+      process.stderr.write(`[bridge] tool_progress: ${toolName} ${elapsed}s\n`);
+      this._emitTaskEvent(this.currentTask?.id ?? "", "tool_progress", {
+        tool_name: toolName, elapsed,
+      });
+      return;
+    }
+
+    // ── auth_status: log changes ──────────────────────────────────
+    if (msg.type === "auth_status") {
+      if (msg.isAuthenticating) process.stderr.write("[bridge] auth: authenticating...\n");
+      if (msg.error) process.stderr.write("[bridge] auth error: " + msg.error + "\n");
+      return;
+    }
+
+    // ── rate_limit_event: log for visibility ──────────────────────
+    if (msg.type === "rate_limit_event") {
+      const status = /** @type {string|undefined} */ (msg.rate_limit_info?.status);
+      process.stderr.write("[bridge] rate_limit: " + (status || "?") + "\n");
+      return;
+    }
+
     // ── session_state_changed: map to task status ──────────────────
     if (msg.type === "session_state_changed") {
       const state = /** @type {string|undefined} */ (msg.state);
@@ -584,6 +609,21 @@ export class Bridge {
     const subs = this._taskSubscribers.get(taskId);
     if (!subs) return;
     const sse = `data: ${JSON.stringify({ type: "chunk", text })}\n\n`;
+    for (const sub of subs) {
+      try { sub.write(sse); } catch { /* subscriber disconnected */ }
+    }
+  }
+
+  /**
+   * Emit an arbitrary event to all subscribers of a task.
+   * @param {string} taskId
+   * @param {string} eventType
+   * @param {Record<string,unknown>} data
+   */
+  _emitTaskEvent(taskId, eventType, data) {
+    const subs = this._taskSubscribers.get(taskId);
+    if (!subs) return;
+    const sse = `data: ${JSON.stringify({ type: eventType, ...data })}\n\n`;
     for (const sub of subs) {
       try { sub.write(sse); } catch { /* subscriber disconnected */ }
     }

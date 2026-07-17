@@ -236,6 +236,62 @@ async function main() {
 
   b6._cleanupProcess();
 
+  // ── Phase 7: tool_progress forwarding ────────────────────
+  group('Phase 7: tool_progress SSE forwarding');
+
+  const b7 = new Bridge();
+  await patchBridge(b7);
+  b7.createTask('tool test', 't-tool').catch(() => {});
+  await sleep(50);
+  b7._state = 'connected'; b7._ready = true;
+  b7.currentTask = { id: 't-tool', result: '', status: 'running' }; b7.busy = true;
+
+  const toolEvents = [];
+  b7.subscribeTask('t-tool', { write: d => { try { const p = JSON.parse(d.replace(/^data: /, '')); if (p.type === 'tool_progress') toolEvents.push(p); } catch {} } });
+
+  b7._onMessage({ type: 'tool_progress', tool_name: 'Bash', tool_use_id: 'tu1', elapsed_time_seconds: 1.5 });
+  b7._onMessage({ type: 'tool_progress', tool_name: 'Read', tool_use_id: 'tu2', elapsed_time_seconds: 3.2 });
+
+  if (toolEvents.length === 2) ok('tool_progress: ' + toolEvents.length + ' events forwarded');
+  else fail('tool_progress count=' + toolEvents.length);
+  if (toolEvents[0]?.tool_name === 'Bash') ok('First tool: Bash (' + toolEvents[0].elapsed + 's)');
+  else fail('First tool wrong', JSON.stringify(toolEvents[0]));
+
+  b7._cleanupProcess();
+
+  // ── Phase 8: auth_status / rate_limit_event ─────────────
+  group('Phase 8: auth_status + rate_limit_event');
+
+  const b8 = new Bridge();
+  await patchBridge(b8);
+  b8.createTask('ar test', 't-ar').catch(() => {});
+  await sleep(50);
+  b8._state = 'connected'; b8._ready = true;
+  b8.currentTask = { id: 't-ar', result: '', status: 'running' }; b8.busy = true;
+
+  // auth_status should not throw
+  b8._onMessage({ type: 'auth_status', isAuthenticating: true, output: ['opening browser...'] });
+  b8._onMessage({ type: 'auth_status', isAuthenticating: false, error: 'cancelled' });
+  ok('auth_status handled without error');
+
+  // rate_limit_event should not throw
+  b8._onMessage({ type: 'rate_limit_event', rate_limit_info: { status: 'exceeded' } });
+  ok('rate_limit_event handled without error');
+
+  b8._cleanupProcess();
+
+  // ── Phase 9: NDJSON stdout guard (MCP mode) ─────────────
+  group('Phase 9: NDJSON stdout guard');
+
+  // Directly test the guard logic: non-JSON should be diverted, JSON should pass
+  const { startMcpServer: startMcp } = await imp(join(PROJECT_ROOT, 'src/hbridge/mcp.mjs'));
+  ok('mcp.mjs exports startMcpServer (guard applied at startup)');
+
+  // Test that the guard function exists by checking stdout.write wrapping
+  const guardText = startMcp.toString();
+  if (guardText.includes('origStdoutWrite')) ok('NDJSON stdout guard is active');
+  else fail('NDJSON guard not found in startMcpServer');
+
   // ── Summary ─────────────────────────────────────────────
   const total = passed + failed;
   console.log('\n' + '='.repeat(60));

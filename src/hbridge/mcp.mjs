@@ -19,6 +19,18 @@ const USER_CMD_FILE = join(homedir(), ".hbridge_user_statusline_cmd");
 // ─── MCP server ─────────────────────────────────────────────────────────
 
 export function startMcpServer() {
+  // NDJSON guard — redirect non-JSON stdout writes to stderr to prevent
+  // third-party console.log from corrupting the JSON-RPC stream.
+  const origStdoutWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (/** @type {string|Uint8Array} */ chunk, ...args) => {
+    const str = typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
+    if (str.trim() && !str.trim().startsWith('{') && !str.trim().startsWith('[')) {
+      process.stderr.write('[stdout-guard] ' + str);
+      return true;
+    }
+    return origStdoutWrite(chunk, ...args);
+  };
+
   // Global crash protection — keep MCP alive even if something slips through
   process.on("uncaughtException", (err) => {
     process.stderr.write(`[hbridge] UNCAUGHT: ${err.message}\n`);
