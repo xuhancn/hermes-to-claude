@@ -23,26 +23,26 @@ async function cmd_enable() {
   const ips = getLocalIPs();
 
   if (isHome()) {
-    console.log(`\n  ╔══════════════════════════════════╗
-  ║  hbridge home mode   ${HBRIDGE_VERSION}  ║
-  ║  Addr:  127.0.0.1:${port}             ║
-  ║  Key:   ${key.padEnd(22)}║
-  ╚══════════════════════════════════╝
+    console.log(`\n  ╔════════════════════════════════════════════╗
+  ║  hbridge home mode    ${HBRIDGE_VERSION.padEnd(19)}  ║
+  ║  Addr:  127.0.0.1:${String(port).padEnd(5)}${' '.repeat(20)}║
+  ║  Key:   ${key.padEnd(36)}║
+  ╚════════════════════════════════════════════╝
 `);
   } else {
     console.log(`
-  ╔══════════════════════════════════╗
-  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}   ${HBRIDGE_VERSION}  ║
-  ║  Remote access is now allowed    ║
-  ║                                  ║
-  ║  Key:    ${key.padEnd(22)}║
-  ║  Addr:   127.0.0.1:${port}          ║`);
+  ╔════════════════════════════════════════════╗
+  ║  ${COLORS.yellow}⚠ H-Bridge enabled${COLORS.reset}   ${HBRIDGE_VERSION.padEnd(19)}  ║
+  ║  Remote access is now allowed             ║
+  ║                                            ║
+  ║  Key:    ${key.padEnd(35)}║
+  ║  Addr:   127.0.0.1:${String(port).padEnd(5)}${' '.repeat(19)}║`);
     for (const ip of ips) {
-      console.log(`  ║         ${(ip + ":" + port).padEnd(22)}║`);
+      console.log(`  ║         ${(ip + ":" + port).padEnd(35)}║`);
     }
-    console.log(`  ║                                  ║
-  ║  Save this key — shown once      ║
-  ╚══════════════════════════════════╝
+    console.log(`  ║                                            ║
+  ║  Save this key — shown once                ║
+  ╚════════════════════════════════════════════╝
 `);
   }
 
