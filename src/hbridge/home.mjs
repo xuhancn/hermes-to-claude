@@ -39,8 +39,8 @@ export function homePort(cwd) {
  * Key for this machine.
  *
  * Returns the random base52 key from ~/.hbridge_key. If the file
- * doesn't exist, generates a new random key and saves it.
- * Same key for all directories on one machine.
+ * is missing, empty, or contains an invalid key, generates a new
+ * random key and saves it. Same key for all directories on one machine.
  *
  * @param {string} [_cwd] — accepted for backward compatibility, ignored.
  */
