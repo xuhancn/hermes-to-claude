@@ -1,6 +1,6 @@
 // Test HTTP server structure — health + auth
 import { createServer } from "../src/hbridge/server.mjs";
-import { UserManager } from "../src/hbridge/users.mjs";
+import { homeKey } from "../src/hbridge/home.mjs";
 import { request } from "http";
 
 let pass = 0, fail = 0;
@@ -9,13 +9,8 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-import { rmSync, unlinkSync, existsSync } from "fs";
-rmSync("hbridge_tasks", { recursive: true, force: true });
-if (existsSync("hbridge_users.json")) unlinkSync("hbridge_users.json");
-
-const users = new UserManager();
-const key = users.add("xu");
-const server = createServer(users);
+const key = homeKey(process.cwd());
+const server = createServer(key);
 
 await new Promise((resolve) => {
   server.listen(9199, () => {
@@ -34,7 +29,5 @@ await new Promise((resolve) => {
   });
 });
 
-rmSync("hbridge_tasks", { recursive: true, force: true });
-if (existsSync("hbridge_users.json")) unlinkSync("hbridge_users.json");
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -1,12 +1,12 @@
 import { createServer as http } from "http";
 import { Bridge } from "./bridge.mjs";
-import { incrementTasks } from "./state.mjs";
+import { incrementTasks, writeState } from "./state.mjs";
 import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 let bridge = new Bridge();
 
-export function createServer(users) {
+export function createServer(expectedKey) {
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -18,22 +18,26 @@ export function createServer(users) {
       return res.end(JSON.stringify({ status: "ok" }));
     }
 
+    // Auth: skip in home mode, enforce key in remote mode
     if (!isHome()) {
       const auth = req.headers["authorization"] || "";
-      const [username, key] = Buffer.from(auth.split(" ")[1] || "", "base64")
-        .toString().split(":");
+      const providedKey = Buffer.from(auth.split(" ")[1] || "", "base64")
+        .toString().split(":")[1];
 
-      const ok = users.verify(username, key);
-        console.error(`AUTH: user=${username} key=${key} ok=${ok}`);
-        if (!ok) {
-          res.writeHead(401);
-          return res.end("Unauthorized");
+      console.error(`AUTH: key_match=${providedKey === expectedKey}`);
+      if (providedKey !== expectedKey) {
+        res.writeHead(401);
+        return res.end("Unauthorized");
       }
     }
 
+    // Track connection info
+    const clientIP = req.socket.remoteAddress?.replace(/^::ffff:/, "") || "unknown";
+    writeState({ lastClientIP: clientIP, lastActiveAt: Date.now() });
+
     const isPost = req.method === "POST";
     let body = "";
-    
+
     async function handle() {
       try {
         let result = {};
@@ -41,7 +45,7 @@ export function createServer(users) {
         const payload = body ? JSON.parse(body) : {};
 
         const [_, v, endpoint, action] = req.url.split("/");
-        
+
         if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;
           incrementTasks();

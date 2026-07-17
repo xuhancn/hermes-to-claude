@@ -23,20 +23,19 @@ const d = readState();
 assert(d.running === false, "default running=false");
 assert(d.port === 9190, "default port=9190");
 assert(d.tasks === 0, "default tasks=0");
-assert(Array.isArray(d.users), "default users is array");
+assert(d.lastClientIP === "", "default lastClientIP=''");
+assert(d.lastActiveAt === 0, "default lastActiveAt=0");
 
 // 2. markRunning
-const r = markRunning(9190, ["xu"]);
+const r = markRunning(9190);
 assert(r.running === true, "markRunning sets running=true");
 assert(r.port === 9190, "markRunning port=9190");
-assert(r.users[0] === "xu", "markRunning users[0]=xu");
 assert(typeof r.startedAt === "number", "markRunning startedAt is number");
 assert(typeof r.updatedAt === "number", "markRunning updatedAt is number");
 
 // 3. readState after markRunning
 const r2 = readState();
 assert(r2.running === true, "readState after markRunning");
-assert(r2.users[0] === "xu", "readState after markRunning users");
 
 // 4. incrementTasks
 const t1 = incrementTasks();
@@ -48,19 +47,23 @@ assert(t2.tasks === 2, "incrementTasks -> 2");
 const s = markStopped();
 assert(s.running === false, "markStopped sets running=false");
 assert(s.tasks === 0, "markStopped resets tasks=0");
-assert(s.users.length === 0, "markStopped resets users");
 assert(s.port === 9190, "markStopped port=9190");
 
 // 6. Partial writeState preserves other fields
-writeState({ running: true, port: 9190, users: ["xu"], tasks: 3, startedAt: 100, updatedAt: 100 });
+writeState({ running: true, port: 9190, tasks: 3, startedAt: 100, updatedAt: 100 });
 writeState({ tasks: 5 });
 const p = readState();
 assert(p.running === true, "partial write preserves running");
-assert(p.users[0] === "xu", "partial write preserves users");
 assert(p.tasks === 5, "partial write updates tasks");
 assert(p.updatedAt !== 100, "partial write updates updatedAt");
 
-// 7. Corrupted state file → default
+// 7. Connection tracking fields persist
+writeState({ lastClientIP: "192.168.1.42", lastActiveAt: 1234567890 });
+const p2 = readState();
+assert(p2.lastClientIP === "192.168.1.42", "lastClientIP persisted");
+assert(p2.lastActiveAt === 1234567890, "lastActiveAt persisted");
+
+// 8. Corrupted state file → default
 writeState({ running: true });
 writeFileSync(STATE_FILE, "{broken json");
 const d2 = readState();
