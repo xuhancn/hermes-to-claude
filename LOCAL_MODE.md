@@ -2,7 +2,7 @@
 
 > **⚠️ EXPERIMENTAL** — 设计阶段，待实施。API 可能变动。
 
-Hermes + Claude 本地零配置协作。区别于 remote 模式（需要手动 `enable` + 认证），local 模式**自动打开、免认证、随 Claude 生命周期自动启停**。
+Hermes + Claude 本地零配置协作（OOB — Out-Of-Box）。区别于 remote 模式（需要手动 `enable` + 认证），local 模式**自动打开、免认证、随 Claude 生命周期自动启停**。
 
 ## 设计动机
 
@@ -15,22 +15,10 @@ Claude → 读 CLAUDE.md → 加载 skill → 执行 → 返回
 
 ## 触发
 
+Hermes 设置环境变量 `HBRIDGE_LOCAL=1`，hbridge 自动感知——零用户操作。不需要修改 MCP config，不需要 Claude 做任何事情。
+
 ```bash
 HBRIDGE_LOCAL=1 node dist/hbridge.mjs --stdio
-```
-
-Claude MCP 配置自动注入环境变量：
-
-```json
-{
-  "mcpServers": {
-    "hbridge": {
-      "command": "node",
-      "args": ["path/to/dist/hbridge.mjs", "--stdio"],
-      "env": { "HBRIDGE_LOCAL": "1" }
-    }
-  }
-}
 ```
 
 ## 行为差异
