@@ -47,6 +47,10 @@ export class Bridge {
     this.transport = null;
     /** Echo-dedup ring buffer for stdout messages. */
     this._recentUUIDs = new BoundedUUIDSet(2000);
+
+    // Task streaming — Map<taskId, Set<{ write: (chunk: string) => void }>>
+    /** @type {Map<string, Set<{ write: (data: string) => void }>>} */
+    this._taskSubscribers = new Map();
   }
 
   async _startClaude() {
@@ -130,6 +134,8 @@ export class Bridge {
       for (const block of content) {
         if (block.type === "text") {
           this.currentTask.result += block.text;
+          // Emit text chunk to SSE subscribers
+          this._emitTaskChunk(this.currentTask.id, block.text);
         }
       }
     }
@@ -142,18 +148,22 @@ export class Bridge {
 
   _finishTask(exitCode) {
     if (!this.currentTask) return;
+    const taskId = this.currentTask.id;
     this.currentTask.status = "done";
     this.currentTask.exitCode = exitCode;
-    this._results.set(this.currentTask.id, { ...this.currentTask });
+    this._results.set(taskId, { ...this.currentTask });
     this.busy = false;
     writeState({
       latestTask: {
-        id: this.currentTask.id,
+        id: taskId,
         prompt: this.currentTask.prompt,
         status: "done",
         exitCode,
       },
     });
+    // Notify SSE subscribers
+    this._emitTaskDone(taskId, exitCode);
+    this._cleanupSubscribers(taskId);
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -163,17 +173,21 @@ export class Bridge {
 
   _failTask(reason) {
     if (!this.currentTask) return;
+    const taskId = this.currentTask.id;
     this.currentTask.status = "failed";
     this.currentTask.result = reason;
-    this._results.set(this.currentTask.id, { ...this.currentTask });
+    this._results.set(taskId, { ...this.currentTask });
     this.busy = false;
     writeState({
       latestTask: {
-        id: this.currentTask.id,
+        id: taskId,
         prompt: this.currentTask.prompt,
         status: "failed",
       },
     });
+    // Notify SSE subscribers
+    this._emitTaskError(taskId, reason);
+    this._cleanupSubscribers(taskId);
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -271,5 +285,83 @@ export class Bridge {
         exitCode: t.exitCode ?? null,
       },
     };
+  }
+
+  // ── Task streaming (SSE) ───────────────────────────────────────────
+
+  /**
+   * Subscribe to streaming output for a task.
+   * @param {string} taskId
+   * @param {{ write: (data: string) => void }} subscriber
+   */
+  subscribeTask(taskId, subscriber) {
+    if (!this._taskSubscribers.has(taskId)) {
+      this._taskSubscribers.set(taskId, new Set());
+    }
+    this._taskSubscribers.get(taskId).add(subscriber);
+  }
+
+  /**
+   * Unsubscribe from streaming output for a task.
+   * @param {string} taskId
+   * @param {{ write: (data: string) => void }} subscriber
+   */
+  unsubscribeTask(taskId, subscriber) {
+    const subs = this._taskSubscribers.get(taskId);
+    if (!subs) return;
+    subs.delete(subscriber);
+    if (subs.size === 0) {
+      this._taskSubscribers.delete(taskId);
+    }
+  }
+
+  /**
+   * Emit a text chunk to all subscribers of a task.
+   * @param {string} taskId
+   * @param {string} text
+   */
+  _emitTaskChunk(taskId, text) {
+    const subs = this._taskSubscribers.get(taskId);
+    if (!subs) return;
+    const sse = `data: ${JSON.stringify({ type: "chunk", text })}\n\n`;
+    for (const sub of subs) {
+      try { sub.write(sse); } catch { /* subscriber disconnected */ }
+    }
+  }
+
+  /**
+   * Emit a done signal to all subscribers of a task.
+   * @param {string} taskId
+   * @param {number} exitCode
+   */
+  _emitTaskDone(taskId, exitCode) {
+    const subs = this._taskSubscribers.get(taskId);
+    if (!subs) return;
+    const sse = `data: ${JSON.stringify({ type: "done", exitCode })}\n\n`;
+    for (const sub of subs) {
+      try { sub.write(sse); } catch { /* subscriber disconnected */ }
+    }
+  }
+
+  /**
+   * Emit an error signal to all subscribers of a task.
+   * @param {string} taskId
+   * @param {string} reason
+   */
+  _emitTaskError(taskId, reason) {
+    const subs = this._taskSubscribers.get(taskId);
+    if (!subs) return;
+    const sse = `data: ${JSON.stringify({ type: "error", reason })}\n\n`;
+    for (const sub of subs) {
+      try { sub.write(sse); } catch { /* subscriber disconnected */ }
+    }
+  }
+
+  /**
+   * Clean up all subscribers for a task.
+   * @param {string} taskId
+   */
+  _cleanupSubscribers(taskId) {
+    this._taskSubscribers.delete(taskId);
   }
 }

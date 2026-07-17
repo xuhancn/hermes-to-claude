@@ -175,3 +175,81 @@ export function handleIngressMessage(
   // Forward to the registered handler
   onMessage?.(msg);
 }
+
+// ─── FlushGate (write-ordering gate) ─────────────────────────────────
+
+/**
+ * Gates message writes during the initial history flush to prevent
+ * ordering races where new messages arrive at the server interleaved
+ * with history.
+ *
+ * - start() — begins gating; subsequent enqueue() calls buffer instead
+ *   of passing through
+ * - end() — stops gating and returns all buffered messages; caller
+ *   should flush them after the history POST completes
+ * - enqueue() — returns true if the item was buffered (gate active),
+ *   false if the gate is not active (caller should send directly)
+ * - drop() — discards buffered messages, returns count
+ * - deactivate() — stops gating without returning buffered messages;
+ *   they remain in the buffer until the next end() call
+ *
+ * @template T
+ */
+export class FlushGate {
+  constructor() {
+    /** @type {boolean} */
+    this.active = false;
+    /** @type {T[]} */
+    this.buffer = [];
+  }
+
+  /**
+   * Start gating. Subsequent enqueue() calls will buffer.
+   */
+  start() {
+    this.active = true;
+  }
+
+  /**
+   * Stop gating and return buffered messages.
+   * @returns {T[]}
+   */
+  end() {
+    const buf = this.buffer;
+    this.buffer = [];
+    this.active = false;
+    return buf;
+  }
+
+  /**
+   * Enqueue an item. If gate is active, buffers it and returns true.
+   * If gate is not active, returns false (caller should send directly).
+   * @param {...T} items
+   * @returns {boolean} true if buffered, false if gate not active
+   */
+  enqueue(...items) {
+    if (this.active) {
+      this.buffer.push(...items);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Discard buffered messages.
+   * @returns {number} number of discarded messages
+   */
+  drop() {
+    const n = this.buffer.length;
+    this.buffer = [];
+    return n;
+  }
+
+  /**
+   * Deactivate the gate without returning buffered messages.
+   * Messages remain in the buffer for a subsequent end() call.
+   */
+  deactivate() {
+    this.active = false;
+  }
+}
