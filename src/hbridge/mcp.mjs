@@ -67,6 +67,9 @@ function handleMcp(msg, users, bridge) {
       t = u[uname] ? u[uname].key : users.add(uname);
       // Start HTTP inbox server in this process (stderr → Claude UI)
       startInboxServer(users, bridge);
+      // Optimistically mark running so statusline picks it up immediately,
+      // without waiting for the async listening event.
+      markRunning(9190, Object.keys(users.list()));
     } else if (name === "hbridge_disable") {
       markStopped();
       t = "disabled";
