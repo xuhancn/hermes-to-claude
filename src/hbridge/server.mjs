@@ -4,9 +4,10 @@ import { incrementTasks, writeState } from "./state.mjs";
 import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
-let bridge = new Bridge();
 
-export function createServer(expectedKey) {
+export function createServer(expectedKey, bridgeInstance) {
+  /** @type {Bridge} */
+  const bridge = bridgeInstance || new Bridge();
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -44,7 +45,9 @@ export function createServer(expectedKey) {
         let status = 200;
         const payload = body ? JSON.parse(body) : {};
 
-        const [_, v, endpoint, action, subaction] = req.url.split("/");
+        const [_, v, endpoint, actionRaw, subactionRaw] = req.url.split("/");
+        const action = actionRaw ? actionRaw.split("?")[0] : "";
+        const subaction = subactionRaw ? subactionRaw.split("?")[0] : "";
 
         // --- SSE streaming endpoint ---
         if (endpoint === "task" && action === "output" && subaction === "stream") {
@@ -78,7 +81,21 @@ export function createServer(expectedKey) {
         } else if (endpoint === "task" && action === "create" && isPost) {
           taskCount++;
           incrementTasks();
-          result = await (async () => bridge.createTask(payload.prompt))();
+          // Fire-and-forget: return task_id immediately, run task in background
+          const taskId = `task_${Date.now()}_${taskCount}`;
+          result = { task_id: taskId, status: "created" };
+          bridge.createTask(payload.prompt, taskId).catch(err => {
+            console.error(`[server] task ${taskId} error: ${err.message}`);
+          });
+        } else if (endpoint === "task" && action === "cancel" && isPost) {
+          const taskId = payload.task_id;
+          if (!taskId) {
+            status = 400;
+            result = { error: "task_id required" };
+          } else {
+            const ok = bridge.cancelTask(taskId);
+            result = ok ? { status: "cancelled", task_id: taskId } : { error: "not_found" };
+          }
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
           result = bridge.getTaskOutput(taskId) || { error: "not_found" };
