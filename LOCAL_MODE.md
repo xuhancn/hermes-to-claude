@@ -1,4 +1,4 @@
-# hbridge Local Mode — Design
+# hbridge Home Local Mode — Design
 
 > **⚠️ EXPERIMENTAL** — 设计阶段，待实施。API 可能变动。
 
@@ -6,7 +6,7 @@ Hermes + Claude 本地零配置协作（OOB — Out-Of-Box）。区别于 remote
 
 ## 设计动机
 
-通用 AI agent (Hermes) 记不住领域细节——经验锁在 skill 文件里。hbridge local mode 让 Hermes 只管调度，把 skill/脚本/工作流全部丢给 Claude 执行。Claude 专注一件事，无记忆污染。
+通用 AI agent (Hermes) 记不住领域细节——经验锁在 skill 文件里。hbridge home local mode 让 Hermes 只管调度，把 skill/脚本/工作流全部丢给 Claude 执行。Claude 专注一件事，无记忆污染。
 
 ```
 Hermes → 算端口 → 连 localhost → 发 task + skill → 看结果
@@ -15,10 +15,10 @@ Claude → 读 CLAUDE.md → 加载 skill → 执行 → 返回
 
 ## 触发
 
-Hermes 设置环境变量 `HBRIDGE_LOCAL=1`，hbridge 自动感知——零用户操作。不需要修改 MCP config，不需要 Claude 做任何事情。
+Hermes 设置环境变量 `HBRIDGE_HOME=1`，hbridge 自动感知——零用户操作。不需要修改 MCP config，不需要 Claude 做任何事情。
 
 ```bash
-HBRIDGE_LOCAL=1 node dist/hbridge.mjs --stdio
+HBRIDGE_HOME=1 node dist/hbridge.mjs --stdio
 ```
 
 ## 行为差异
@@ -40,8 +40,8 @@ port = 9200 + (md5(cwd)[0:2] % 600)
 
 ## 实现要点
 
-1. 检测 `HBRIDGE_LOCAL=1` → 自动启动 HTTP server（无需 `enable`）
-2. 认证中间件：`if HBRIDGE_LOCAL` → skip auth
+1. 检测 `HBRIDGE_HOME=1` → 自动启动 HTTP server（无需 `enable`）
+2. 认证中间件：`if HBRIDGE_HOME` → skip auth
 3. 端口 = hash(cwd)，不固定 9190
 4. `process.on("exit")` → 自动关 server
 
