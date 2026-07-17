@@ -125,6 +125,14 @@ for (const dir of ["/a", "/b", "/test"]) {
   assert(homePort(dir) === expectedPort, `homePort(${JSON.stringify(dir)}) matches raw MD5 calculation`);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// homePort() — known hardcoded values (regression guard)
+// ═══════════════════════════════════════════════════════════════
+// These values must never change for the same input.
+assert(homePort("/tmp/test") === 9352, 'homePort("/tmp/test") === 9352');
+assert(homePort("/home/user/project") === 9578, 'homePort("/home/user/project") === 9578');
+assert(homePort("D:/xu_git/hermes-claude-bridge") === 9330, 'homePort("D:/xu_git/hermes-claude-bridge") === 9330');
+
 // Cleanup
 process.env.HBRIDGE_HOME = saved;
 
