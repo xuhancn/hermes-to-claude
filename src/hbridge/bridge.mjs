@@ -249,17 +249,6 @@ export class Bridge {
       return;
     }
 
-    // ── keep_alive: bidirectional heartbeat ────────────────────────
-    if (msg.type === "keep_alive") {
-      return; // nothing to do; liveness timer was already reset
-    }
-
-    // ── system/init: extract session info ──────────────────────────
-    if (msg.type === "system" && msg.subtype === "init") {
-      this._sessionId = /** @type {string|undefined} */ (msg.session_id);
-      return;
-    }
-
     // ── Progressive streaming ──────────────────────────────────────
     // Claude Code sends the FULL content array in each update (same message.id).
     // Track per-message progress to extract only the delta text.
