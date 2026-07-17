@@ -142,11 +142,17 @@ export class Bridge {
       // Reset liveness timer on any data
       this._resetLiveness();
       try {
-        const msg = JSON.parse(line);
+        // Escape U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR)
+        // which are valid in JSON5 but cause JSON.parse to throw in strict mode JSON.
+        const LS = String.fromCharCode(0x2028);
+        const PS = String.fromCharCode(0x2029);
+        const sanitized = line.replaceAll(LS, '\\u2028').replaceAll(PS, '\\u2029');
+        const msg = JSON.parse(sanitized);
         if (!this._ready) this._ready = true;
         this._onMessage(msg);
       } catch (e) {
-        process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
+        // NDJSON guard — non-JSON lines are redirected to stderr for visibility
+        process.stderr.write(`[claude:stdout] non-JSON (${line.length}B): ${line.slice(0, 200)}\n`);
       }
     });
 
@@ -190,6 +196,44 @@ export class Bridge {
       this._recentUUIDs.add(/** @type {string} */(msg.uuid));
     }
 
+    // ── keep_alive: bidirectional heartbeat ────────────────────────
+    if (msg.type === "keep_alive") {
+      return; // nothing to do; liveness timer was already reset
+    }
+
+    // ── system/init: extract session info ──────────────────────────
+    if (msg.type === "system" && msg.subtype === "init") {
+      this._sessionId = /** @type {string|undefined} */ (msg.session_id);
+      return;
+    }
+
+    // ── control_request: lifecycle handshake ────────────────────────
+    // Claude Code emits control_request for lifecycle events (initialize, etc.)
+    // The bridge must respond with a control_response.
+    if (msg.type === "control_request") {
+      const reqId = /** @type {string} */ (msg.request_id ?? '');
+      const subtype = /** @type {string|undefined} */ (msg.request?.subtype);
+      process.stderr.write(`[bridge] control_request: ${subtype || '?'} (id=${reqId})\n`);
+      this.transport?.write({
+        type: "control_response",
+        response_id: reqId,
+        response: { subtype: "success" },
+      }).catch(() => {});
+      return;
+    }
+
+    // ── session_state_changed: map to task status ──────────────────
+    if (msg.type === "session_state_changed") {
+      const state = /** @type {string|undefined} */ (msg.state);
+      process.stderr.write(`[bridge] session_state: ${state}\n`);
+      if (state === "idle" && this.currentTask) {
+        process.stderr.write(`[bridge] session idle → finishing task\n`);
+        this._finishTask(0);
+      }
+      return;
+    }
+
+    // Everything below requires a current task
     if (!this.currentTask) return;
 
     // ── stream_event: progressive text deltas ──────────────────────
@@ -223,11 +267,24 @@ export class Bridge {
     const blocks = msg.content || (msg.message && msg.message.content);
 
     if (blocks) {
-      // Concatenate all text blocks into one string
+      // Concatenate all content blocks into one string for delta tracking
+      // Supports: text, tool_use, tool_result
       let fullText = '';
       for (const block of blocks) {
         if (block.type === "text") {
           fullText += block.text;
+        } else if (block.type === "tool_use") {
+          fullText += `\n<tool_use name="${block.name}">\n${JSON.stringify(block.input)}\n</tool_use>\n`;
+        } else if (block.type === "tool_result") {
+          let resultText = '';
+          if (typeof block.content === 'string') {
+            resultText = block.content;
+          } else if (Array.isArray(block.content)) {
+            for (const item of block.content) {
+              if (item.type === "text") resultText += item.text;
+            }
+          }
+          fullText += `\n<tool_result>\n${resultText}\n</tool_result>\n`;
         }
       }
 
