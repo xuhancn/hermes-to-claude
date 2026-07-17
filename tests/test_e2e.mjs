@@ -15,16 +15,15 @@
 
 import { spawn } from 'child_process';
 import { createServer } from 'http';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { randomUUID } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..');
 
-// Import Bridge and server
-const bridgePath = join(PROJECT_ROOT, 'src/hbridge/bridge.mjs');
-const serverPath = join(PROJECT_ROOT, 'src/hbridge/server.mjs');
+function imp(absPath) { return import(pathToFileURL(absPath).href); }
+async function impMod(name) { return imp(join(PROJECT_ROOT, name)); }
 
 let passed = 0, failed = 0;
 function ok(msg) { passed++; console.log('  ✅ ' + msg); }
@@ -46,11 +45,11 @@ async function main() {
   // ── Phase 1: Task lifecycle via Bridge directly ────────
   group('Phase 1: Bridge.createTask with simple prompt');
 
-  const { Bridge } = await import(bridgePath);
+  const { Bridge } = await imp(bridgePath);
   const bridge = new Bridge();
 
   // Patch _startClaude to handle spawn
-  const { StdioTransport } = await import(join(PROJECT_ROOT, 'src/hbridge/transport/StdioTransport.mjs'));
+  const { StdioTransport } = await impMod('src/hbridge/transport/StdioTransport.mjs');
   bridge._startClaude = async function(opts = {}) {
     if (this._state === 'connected' && this.child && !this.child.killed) return true;
     if (this._state === 'connecting') { while (this._state === 'connecting') await sleep(200); return this._state === 'connected'; }
@@ -110,8 +109,8 @@ async function main() {
   // ── Phase 3: HTTP server endpoints ─────────────────────
   group('Phase 3: HTTP server endpoints');
 
-  const { createServer: createHttpServer } = await import(serverPath);
-  const httpBridge = (await import(bridgePath)).Bridge;
+  const { createServer: createHttpServer } = await imp(serverPath);
+  const httpBridge = (await imp(bridgePath)).Bridge;
   const b2 = new httpBridge();
 
   b2._startClaude = async function(opts = {}) {
