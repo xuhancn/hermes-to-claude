@@ -112,7 +112,12 @@ export class SerialBatchEventUploader {
    * @returns {Promise<void>}
    */
   async flush() {
-    if (this.pending.length === 0 || this.closed) return;
+    if (this.closed) return;
+    // Drain may have taken items but send is still in-flight
+    if (this.draining && this._drainPromise) {
+      await this._drainPromise;
+    }
+    if (this.pending.length === 0) return;
     await new Promise((resolve) => {
       this.flushResolvers.push(resolve);
     });
