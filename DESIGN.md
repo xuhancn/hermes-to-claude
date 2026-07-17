@@ -27,11 +27,11 @@ Claude Code
 Claude Code polls ~3-5s:
 
 ```
-▶️ hbridge: on | :XXXX | 📨"fix bug"
+▶️ hbridge: on | :<port>
 ⏹️ hbridge: off
 ```
 
-Task info from `~/.hbridge_state.json.latestTask`, written by Bridge on each state change.
+Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file dependency, so it always reflects actual server state for the current directory's deterministic port.
 
 ## Key Format & Derivation
 
@@ -57,7 +57,7 @@ Timeout: 5 minutes per task. On timeout, task is marked "failed" and queue advan
 ### Runtime (gitignored)
 | File | Purpose |
 |------|---------|
-| `~/.hbridge_state.json` | running/stopped flag + port + latestTask + lastClientIP |
+| `~/.hbridge_state.json` | running/stopped flag + port + lastClientIP/lastActiveAt (written by server, read by MCP tools) |
 
 ### Config (written by postinstall)
 | File | Purpose |
