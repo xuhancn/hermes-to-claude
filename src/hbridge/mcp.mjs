@@ -29,6 +29,12 @@ export function startMcpServer() {
 
   const key = homeKey(process.cwd());
   const bridge = new Bridge();
+
+  // Home Mode — auto-start HTTP server (no enable needed)
+  if (process.env.HBRIDGE_HOME === "1") {
+    startInboxServer(key, bridge);
+  }
+
   let buf = "";
 
   process.stdin.on("data", (chunk) => {
