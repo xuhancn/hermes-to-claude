@@ -151,22 +151,10 @@ export class Bridge {
     // Start reading stdout
     this.transport.connect();
 
-    // Wait for the process to be ready
-    await Promise.race([
-      new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (this._ready) { clearInterval(check); resolve(); }
-        }, 50);
-      }),
-      sleep(5000).then(() => { if (!this._ready) return 'timeout'; }),
-    ]);
-
-    if (!this._ready) {
-      process.stderr.write(`[bridge] process not ready after 5s\n`);
-      this._state = STATE.FAILED;
-      this._scheduleReconnect();
-      return false;
-    }
+    // Claude Code only writes to stdout after receiving stdin,
+    // so we cannot wait for stdout data as a ready signal.
+    // The child is alive if spawn() didn't throw — mark ready immediately.
+    this._ready = true;
 
     this._state = STATE.CONNECTED;
     this._resetReconnectState();
