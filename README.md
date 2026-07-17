@@ -8,6 +8,12 @@ Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persis
                                           stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
 
+**Use cases:**
+
+- **Remote control**: Send tasks from your phone via Hermes — hbridge forwards to Claude Code running on your machine. Fix bugs, review code, run commands without sitting at your desk.
+- **Dev assistant**: Hermes handles lightweight tasks; when it hits a codebase-specific problem, it delegates to Claude Code via hbridge. Claude reads the project, edits files, runs tests, and reports back.
+- **Centralized hub**: Hermes becomes your single entry point — it routes tasks to the right tool (Claude Code, web search, etc.) and aggregates results. hbridge is the Claude Code plugin in this ecosystem.
+
 ## Advanced of hbridge
 
 - **Security**: Hermes never touches your filesystem — all file ops go through Claude Code's Auto Mode permission system. No blind access.
