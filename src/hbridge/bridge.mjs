@@ -1,21 +1,22 @@
-import { spawn } from "child_process";
-import { randomUUID } from "crypto";
-import { createInterface } from "readline";
-import { writeState } from "./state.mjs";
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 /**
- * Bridge — persistent Claude Code process manager.
+ * Bridge — persistent Claude Code process manager with streaming transport.
  *
  * Spawns ONE Claude process with --print --input-format stream-json
- * --output-format stream-json. Tasks sent as JSON-RPC messages via
- * stdin. Results parsed from NDJSON on stdout.
+ * --output-format stream-json. Uses StdioTransport for reliable,
+ * ordered I/O with batching and backpressure.
  *
  *   → {"role":"user","content":"fix bug"}
  *   ← {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
  *   ← {"type":"result","subtype":"success"}
  */
+
+import { spawn } from "child_process";
+import { randomUUID } from "crypto";
+import { writeState } from "./state.mjs";
+import { StdioTransport } from "./transport/StdioTransport.mjs";
+import { BoundedUUIDSet } from "./bridgeMessaging.mjs";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const CLAUDE_ARGS = [
   "@anthropic-ai/claude-code",
@@ -37,16 +38,20 @@ export class Bridge {
     this.currentTask = null;
     this._results = new Map();
     this._taskResolve = null;
-    this._starting = false;      // guard: prevent concurrent spawns
-    this._ready = false;         // true when child process is accepting input
-    this._restarts = 0;          // consecutive restart count
-    // Lazy — no _startClaude here. Spawn happens on first createTask.
+    this._starting = false;
+    this._ready = false;
+    this._restarts = 0;
+
+    // Transport layer
+    /** @type {StdioTransport|null} */
+    this.transport = null;
+    /** Echo-dedup ring buffer for stdout messages. */
+    this._recentUUIDs = new BoundedUUIDSet(2000);
   }
 
   async _startClaude() {
     if (this.child && !this.child.killed) return;
     if (this._starting) {
-      // Another createTask is already spawning — wait for it
       while (this._starting) await sleep(200);
       return;
     }
@@ -63,56 +68,59 @@ export class Bridge {
       env: { ...process.env },
     });
 
-    // Forward stderr to debug (appears in Claude Code's MCP server log)
-    this.child.stderr.on("data", (d) => {
-      process.stderr.write(`[claude] ${d.toString()}`);
-    });
+    // Create transport layer — wraps child stdin/stdout
+    this.transport = new StdioTransport(this.child);
 
-    // Parse NDJSON from stdout
-    let stdoutLines = 0;
-    const rl = createInterface({ input: this.child.stdout });
-    rl.on("line", (line) => {
-      stdoutLines++;
-      // Log first 5 lines for debugging
-      if (stdoutLines <= 5) {
-        process.stderr.write(`[claude:stdout] ${line.slice(0, 200)}\n`);
-      }
+    // Wire inbound messages — full transcript is recorded by transport's
+    // NDJSON tee at ~/.hbridge_transcript.jsonl
+    this.transport.setOnData((line) => {
       try {
         const msg = JSON.parse(line);
         if (!this._ready) this._ready = true;
         this._onMessage(msg);
       } catch (e) {
-        if (stdoutLines <= 5) {
-          process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
-        }
+        process.stderr.write(`[claude:stdout] parse error: ${e.message}\n`);
       }
     });
 
-    this.child.on("error", (err) => {
-      process.stderr.write(`[bridge] spawn error: ${err.message}\n`);
-      this._failTask(`spawn error: ${err.message}`);
+    this.transport.setOnClose((code) => {
+      process.stderr.write(`[bridge] transport closed (code=${code})\n`);
+      if (code !== 0) {
+        this._failTask(`Claude process exited (code=${code})`);
+      }
     });
 
-    this.child.on("close", () => {
-      process.stderr.write(`[bridge] Claude process exited\n`);
-      this._failTask("Claude process exited");
-    });
+    // Start reading stdout
+    this.transport.connect();
 
-    // Wait for the process to be ready (stdin writable + first output)
+    // Wait for the process to be ready
     await Promise.race([
       new Promise((resolve) => {
         const check = setInterval(() => {
           if (this._ready) { clearInterval(check); resolve(); }
         }, 50);
       }),
-      sleep(5000), // timeout: give up after 5s
+      sleep(5000),
     ]);
 
     this._starting = false;
   }
 
-    _onMessage(msg) {
+  /**
+   * Handle a parsed NDJSON message from Claude's stdout.
+   * @param {Record<string,unknown>} msg
+   */
+  _onMessage(msg) {
     process.stderr.write(`[bridge:msg] role=${msg.role||msg.type||"?"} task=${!!this.currentTask}\n`);
+
+    // UUID-based echo dedup (safety net — transport batching may replay)
+    if (msg.uuid && this._recentUUIDs.has(/** @type {string} */(msg.uuid))) {
+      return;
+    }
+    if (msg.uuid) {
+      this._recentUUIDs.add(/** @type {string} */(msg.uuid));
+    }
+
     if (!this.currentTask) return;
 
     // Claude API format: {role:"assistant", content:[{type:"text",text:"..."}]}
@@ -138,7 +146,14 @@ export class Bridge {
     this.currentTask.exitCode = exitCode;
     this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
-    writeState({ latestTask: { id: this.currentTask.id, prompt: this.currentTask.prompt, status: "done", exitCode } });
+    writeState({
+      latestTask: {
+        id: this.currentTask.id,
+        prompt: this.currentTask.prompt,
+        status: "done",
+        exitCode,
+      },
+    });
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -152,7 +167,13 @@ export class Bridge {
     this.currentTask.result = reason;
     this._results.set(this.currentTask.id, { ...this.currentTask });
     this.busy = false;
-    writeState({ latestTask: { id: this.currentTask.id, prompt: this.currentTask.prompt, status: "failed" } });
+    writeState({
+      latestTask: {
+        id: this.currentTask.id,
+        prompt: this.currentTask.prompt,
+        status: "failed",
+      },
+    });
     this.currentTask = null;
     if (this._taskResolve) {
       this._taskResolve();
@@ -174,7 +195,7 @@ export class Bridge {
       this._restarts = 0;
     }
 
-    // Ensure Claude is running (await spawn + readiness)
+    // Ensure Claude is running
     if (!this.child || this.child.killed) {
       await this._startClaude();
     }
@@ -189,7 +210,13 @@ export class Bridge {
     }
 
     // Set up current task
-    this.currentTask = { id, prompt, status: "running", result: "", exitCode: null };
+    this.currentTask = {
+      id,
+      prompt,
+      status: "running",
+      result: "",
+      exitCode: null,
+    };
     this.busy = true;
     writeState({ latestTask: { id, prompt, status: "running" } });
 
@@ -197,11 +224,18 @@ export class Bridge {
       this._taskResolve = resolve;
     });
 
-    // Send prompt via JSON-RPC
-    const msg = JSON.stringify({ type: "user", session_id: "", message: { role: "user", content: prompt }, parent_tool_use_id: null }) + "\n";
-    this.child.stdin.write(msg);
+    // Send prompt via transport (ordered batch — integrates with SerialBatchEventUploader)
+    const msg = {
+      type: "user",
+      session_id: "",
+      message: { role: "user", content: prompt },
+      parent_tool_use_id: null,
+    };
+    this.transport?.write(msg).catch((err) => {
+      process.stderr.write(`[bridge] transport write error: ${err.message}\n`);
+    });
 
-    // Wait for result NDJSON (with timeout to prevent infinite hang)
+    // Wait for result (with timeout to prevent infinite hang)
     const winner = await Promise.race([
       taskDone,
       sleep(TASK_TIMEOUT_MS).then(() => "timeout"),
@@ -217,13 +251,15 @@ export class Bridge {
   }
 
   getTask(taskId) {
-    const t = this._results.get(taskId) || (this.currentTask?.id === taskId ? this.currentTask : null);
+    const t = this._results.get(taskId) ||
+      (this.currentTask?.id === taskId ? this.currentTask : null);
     if (!t) return null;
     return { id: t.id, status: t.status, created: 0 };
   }
 
   getTaskOutput(taskId) {
-    const t = this._results.get(taskId) || (this.currentTask?.id === taskId ? this.currentTask : null);
+    const t = this._results.get(taskId) ||
+      (this.currentTask?.id === taskId ? this.currentTask : null);
     if (!t) return null;
     const done = t.status === "done" || t.status === "failed";
     return {
