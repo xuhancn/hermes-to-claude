@@ -1,65 +1,65 @@
-# MCP Protocol Spec — hbridge 对照
+# MCP Protocol Spec — hbridge Mapping
 
 Spec: https://modelcontextprotocol.io/specification/2024-11-05
 
-## 1. Lifecycle — 初始化阶段
+## 1. Lifecycle — Initialization
 
-**文档位置**: `Specification → Base Protocol → Lifecycle → Initialization`
+**Spec ref**: `Specification → Base Protocol → Lifecycle → Initialization`
 
-**流程**:
+**Sequence**:
 ```
 Client → Server:  initialize  (protocolVersion + capabilities + clientInfo)
 Server → Client:  initialize response (protocolVersion + capabilities + serverInfo)
 Client → Server:  notifications/initialized  (no response needed)
 ```
 
-**hbridge 实现**: `mcp.mjs` line 17-21
+**hbridge implementation**: `mcp.mjs` lines 17-21
 
-## 2. Capabilities — tools 必须声明 listChanged
+## 2. Capabilities — tools MUST declare listChanged
 
-**文档位置**: `Specification → Server Features → Tools → Capabilities`
+**Spec ref**: `Specification → Server Features → Tools → Capabilities`
 
-**原文**: "Servers that support tools MUST declare the tools capability"
+**Spec quote**: "Servers that support tools MUST declare the tools capability"
 ```
 {"capabilities": {"tools": {"listChanged": true}}}
 ```
 
-**hbridge 实现**: `mcp.mjs` line 19 — `capabilities: { tools: { listChanged: true } }`
+**hbridge implementation**: `mcp.mjs` line 19 — `capabilities: { tools: { listChanged: true } }`
 
-## 3. Tool 定义格式
+## 3. Tool Definition Format
 
-**文档位置**: `Specification → Server Features → Tools → Data Types → Tool`
+**Spec ref**: `Specification → Server Features → Tools → Data Types → Tool`
 
-**字段**:
+**Fields**:
 - `name` (string, required) — unique tool name
 - `description` (string, optional) — human-readable description
 - `inputSchema` (object, required) — JSON Schema for tool parameters
 
-**hbridge 实现**: `mcp.mjs` TOOLS array, line 33-38 — all 5 tools have name + description + inputSchema
+**hbridge implementation**: `mcp.mjs` TOOLS array, lines 33-38 — all 5 tools have name + description + inputSchema
 
-## 4. tools/list 响应
+## 4. tools/list Response
 
-**文档位置**: `Specification → Server Features → Tools → Protocol Messages → Listing Tools`
+**Spec ref**: `Specification → Server Features → Tools → Protocol Messages → Listing Tools`
 
-**响应格式**:
+**Response format**:
 ```
 {"tools": [Tool, Tool, ...]}
 ```
 
-**hbridge 实现**: `mcp.mjs` line 24 — respond({ result: { tools: TOOLS } })
+**hbridge implementation**: `mcp.mjs` line 24 — respond({ result: { tools: TOOLS } })
 
-## 5. tools/call 响应
+## 5. tools/call Response
 
-**文档位置**: `Specification → Server Features → Tools → Data Types → Text Content`
+**Spec ref**: `Specification → Server Features → Tools → Data Types → Text Content`
 
-**格式**:
+**Format**:
 ```
 {"content": [{"type": "text", "text": "result string"}]}
 ```
 
-**hbridge 实现**: `mcp.mjs` line 27-31 — respond({ result: { content: [{ type: "text", text: t }] } })
+**hbridge implementation**: `mcp.mjs` lines 27-31 — respond({ result: { content: [{ type: "text", text: t }] } })
 
-## 6. 验证结果
+## 6. Validation Results
 
 ```
 ✅ initialize   → protocolVersion:2024-11-05, capabilities.listChanged:true

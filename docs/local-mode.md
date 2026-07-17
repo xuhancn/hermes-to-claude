@@ -1,54 +1,54 @@
 # hbridge Home Local Mode — Design
 
-> **⚠️ EXPERIMENTAL** — 设计阶段，待实施。API 可能变动。
+> **⚠️ EXPERIMENTAL** — Design phase, not yet implemented. API subject to change.
 
-Hermes + Claude 本地零配置协作（OOB — Out-Of-Box）。区别于 remote 模式（需要手动 `enable` + 认证），local 模式**自动打开、免认证、随 Claude 生命周期自动启停**。
+Zero-config local collaboration between Hermes and Claude (OOB — Out-Of-Box). Unlike remote mode (manual `enable` + authentication required), local mode starts **automatically, no auth, and lives as long as Claude does**.
 
-## 设计动机
+## Motivation
 
-通用 AI agent (Hermes) 记不住领域细节——经验锁在 skill 文件里。hbridge home local mode 让 Hermes 只管调度，把 skill/脚本/工作流全部丢给 Claude 执行。Claude 专注一件事，无记忆污染。
+A general-purpose AI agent (Hermes) cannot remember domain specifics — experience is locked in skill files. hbridge Home Local Mode lets Hermes focus on orchestration only, delegating skills, scripts, and workflows to Claude. Claude owns one task at a time with zero memory pollution.
 
 ```
-Hermes → 算端口 → 连 localhost → 发 task + skill → 看结果
-Claude → 读 CLAUDE.md → 加载 skill → 执行 → 返回
+Hermes → compute port → connect localhost → send task + skill → read result
+Claude → read CLAUDE.md → load skill → execute → respond
 ```
 
-## 触发
+## Trigger
 
-Hermes 设置环境变量 `HBRIDGE_HOME=1`，hbridge 自动感知——零用户操作。不需要修改 MCP config，不需要 Claude 做任何事情。
+Hermes sets the environment variable `HBRIDGE_HOME=1` and hbridge picks it up automatically — zero user action. No MCP config changes, no Claude involvement needed.
 
 ```bash
 HBRIDGE_HOME=1 node dist/hbridge.mjs --stdio
 ```
 
-## 行为差异
+## Behavioral Differences
 
-| | remote 模式 | local 模式 |
-|------|------------|-----------|
-| 启动 | 手动 `enable hbridge` | **自动打开** |
-| 认证 | Basic Auth 必须 | **免认证** (127.0.0.1) |
-| 端口 | 固定 9190 | **hash(cwd)** |
-| 生命周期 | 手动 disable | **Claude 退出即关** |
+| | Remote Mode | Local Mode |
+|------|-------------|------------|
+| Startup | Manual `enable hbridge` | **Auto-start** |
+| Auth | Basic Auth required | **No auth** (127.0.0.1) |
+| Port | Fixed 9190 | **hash(cwd)** |
+| Lifecycle | Manual disable | **Auto-stop on Claude exit** |
 
-## 端口映射
+## Port Mapping
 
 ```
 port = 9200 + (md5(cwd)[0:2] % 600)
 ```
 
-每个工作目录固定端口。Hermes 按同样算法算端口后直连。
+Each working directory gets a deterministic port. Hermes computes the same port to connect.
 
-## 实现要点
+## Implementation Notes
 
-1. 检测 `HBRIDGE_HOME=1` → 自动启动 HTTP server（无需 `enable`）
-2. 认证中间件：`if HBRIDGE_HOME` → skip auth
-3. 端口 = hash(cwd)，不固定 9190
-4. `process.on("exit")` → 自动关 server
+1. Detect `HBRIDGE_HOME=1` → auto-start HTTP server (no `enable` needed)
+2. Auth middleware: `if HBRIDGE_HOME` → skip auth
+3. Port = hash(cwd), not fixed 9190
+4. `process.on("exit")` → auto-shutdown server
 
 ## API
 
-与 remote 完全一致 — 只是免 auth 端口不同。
+Identical to remote mode — only the port (and no auth) differs.
 
-## 状态
+## Status
 
-**设计阶段** — 未实施。
+**Design phase** — not yet implemented.
