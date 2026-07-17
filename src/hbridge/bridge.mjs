@@ -81,6 +81,8 @@ export class Bridge {
     // ── Progressive streaming — track text per message.id ──
     /** @type {Map<string, { lastText: string }>} */
     this._msgTextProgress = new Map();
+    /** Total text accumulated from stream_event deltas in current task. */
+    this._streamTextAccum = 0;
 
     // ── Session tracking ──
     /** @type {string|undefined} */
@@ -261,6 +263,7 @@ export class Bridge {
       if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
         const delta = /** @type {string} */ (event.delta.text);
         this.currentTask.result += delta;
+        this._streamTextAccum += delta.length; // track total from stream_event
         this._emitTaskChunk(this.currentTask.id, delta);
       }
       return;
@@ -295,23 +298,28 @@ export class Bridge {
       }
 
       if (fullText) {
-        // Compute delta against what we've already seen for this message ID
-        const prev = msgId ? this._msgTextProgress.get(msgId) : null;
-        const prevText = prev?.lastText || '';
-        const delta = fullText.slice(prevText.length);
-
-        if (delta) {
-          this.currentTask.result += delta;
-          this._emitTaskChunk(this.currentTask.id, delta);
-        }
-
-        // Update progress (even if delta is empty — avoid re-processing)
+        // Compute delta: if message has an ID, use per-message tracking;
+        // otherwise check if text was already delivered via stream_event deltas.
+        let delta;
         if (msgId) {
+          const prev = this._msgTextProgress.get(msgId);
+          const prevText = prev?.lastText || '';
+          delta = fullText.slice(prevText.length);
+          // Update progress (even if delta is empty — avoid re-processing)
           if (prev) {
             prev.lastText = fullText;
           } else {
             this._msgTextProgress.set(msgId, { lastText: fullText });
           }
+        } else {
+          // No message ID — use stream_event accumulated text as baseline
+          // to avoid duplicating text delivered via stream_event deltas.
+          delta = fullText.slice(this._streamTextAccum);
+        }
+
+        if (delta) {
+          this.currentTask.result += delta;
+          this._emitTaskChunk(this.currentTask.id, delta);
         }
       }
     }
@@ -450,6 +458,7 @@ export class Bridge {
     this.busy = true;
     // Reset per-task streaming state
     this._msgTextProgress.clear();
+    this._streamTextAccum = 0;
     this._autoRespondCount = 0;
     writeState({ latestTask: { id, prompt, status: "running" } });
 
@@ -690,6 +699,7 @@ export class Bridge {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
+    this._state = STATE.IDLE; // prevent reconnect on transport close events
     if (this.transport) {
       try { this.transport.close(); } catch {}
       this.transport = null;
