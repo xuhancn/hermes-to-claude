@@ -23,15 +23,11 @@ async function cmd_enable(username) {
   const users = new UserManager();
 
   if (isHome()) {
-    // Home mode: no auth, no user management needed
-    const ips = getLocalIPs();
+    // Home mode: no auth, no user management needed, localhost only
     console.log(`\n  ╔══════════════════════════════════╗
   ║  hbridge home mode   ${HBRIDGE_VERSION}  ║
-  ║  Port: :${PORT}                        ║`);
-    for (const ip of ips) {
-      console.log(`  ║  LAN:  ${(ip + ":" + PORT).padEnd(22)}║`);
-    }
-    console.log(`  ╚══════════════════════════════════╝
+  ║  Addr:  127.0.0.1:${PORT}             ║
+  ╚══════════════════════════════════╝
 `);
   } else {
     if (!username) {
@@ -68,7 +64,7 @@ async function cmd_enable(username) {
   }
 
   server = createServer(users);
-  server.listen(PORT);
+  server.listen(PORT, isHome() ? "127.0.0.1" : undefined);
   markRunning(PORT, Object.keys(users.list()));
 
   startStatusBar(PORT);
@@ -166,6 +162,12 @@ const args = process.argv.slice(2);
 const cmd = args[0];
 const sub = args[1];
 const val = args[2];
+
+// Home mode: block manual enable/disable
+if (isHome() && (cmd === "--enable" || cmd === "--disable")) {
+  console.log("Home mode active — manual control disabled");
+  process.exit(0);
+}
 
 if (cmd === "--enable") cmd_enable(sub);
 else if (cmd === "--disable") cmd_disable();
