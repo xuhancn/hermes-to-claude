@@ -69,17 +69,24 @@ function handleMcp(msg, key, bridge) {
       t = k;
     } else if (name === "hbridge_disable") {
       if (inboxServer) {
-        inboxServer.close();
+        const srv = inboxServer;
         inboxServer = null;
+        srv.close((err) => {
+          if (err) process.stderr.write(`[hbridge] close error: ${err.message}\n`);
+        });
       }
       markStopped();
       t = "disabled";
     } else if (name === "hbridge_status") {
-      const port = homePort(process.cwd());
       const state = readState();
-      t = `hbridge running on :${port}`;
-      if (state.lastClientIP) {
-        t += ` | Last: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
+      if (!state.running) {
+        t = "hbridge stopped";
+      } else {
+        const port = state.port || homePort(process.cwd());
+        t = `hbridge running on :${port}`;
+        if (state.lastClientIP) {
+          t += ` | Last: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
+        }
       }
     }
     respond({
