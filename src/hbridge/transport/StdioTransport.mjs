@@ -208,6 +208,23 @@ export class StdioTransport {
   // ── Internal ─────────────────────────────────────────────────────────
 
   /**
+   * Safely JSON-stringify a message for NDJSON transport.
+   * Escapes U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR)
+   * which can break JavaScript readline line-splitting semantics.
+   * @param {unknown} msg
+   * @returns {string}
+   */
+  _ndjsonStringify(msg) {
+    // Escape U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR)
+    // to prevent Node.js readline from splitting on JavaScript
+    // line-terminator characters embedded in string values.
+    const str = JSON.stringify(msg);
+    return str
+      .replaceAll(' ', '\\u2028')
+      .replaceAll(' ', '\\u2029');
+  }
+
+  /**
    * Actually write a batch of serialized JSON to stdin.
    * Called by SerialBatchEventUploader.send().
    * @param {unknown[]} batch
@@ -221,7 +238,7 @@ export class StdioTransport {
     // Build a single string with newline-delimited JSON
     let payload = '';
     for (const msg of batch) {
-      payload += JSON.stringify(msg) + '\n';
+      payload += this._ndjsonStringify(msg) + '\n';
     }
 
     return new Promise((resolve, reject) => {

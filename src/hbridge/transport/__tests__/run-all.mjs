@@ -1333,6 +1333,334 @@ describe('Bridge — streaming: unsubscribe during stream')
 }
 
 // ===================================================================
+// Phase 4 — NDJSON safe stringify (PR #43)
+// ===================================================================
+
+describe('StdioTransport — _ndjsonStringify escapes U+2028/U+2029')
+{
+  const t = new StdioTransport(mockChild())
+  assert(typeof t._ndjsonStringify === 'function', '_ndjsonStringify exists')
+
+  const result = t._ndjsonStringify({ text: 'before after end' })
+  assert(!result.includes(' '), 'U+2028 escaped in output')
+  assert(!result.includes(' '), 'U+2029 escaped in output')
+  assert(result.includes('\\u2028'), 'U+2028 replaced with \\u2028')
+  assert(result.includes('\\u2029'), 'U+2029 replaced with \\u2029')
+  assert(result.includes('before'), 'text before separator preserved')
+  assert(result.includes('after'), 'text between separators preserved')
+  assert(result.includes('end'), 'text after separator preserved')
+}
+
+describe('StdioTransport — _ndjsonStringify normal strings unchanged')
+{
+  const t = new StdioTransport(mockChild())
+  const result = t._ndjsonStringify({ msg: 'hello world', num: 42 })
+  const parsed = JSON.parse(result)
+  assert(parsed.msg === 'hello world', 'normal strings unchanged')
+  assert(parsed.num === 42, 'numbers unchanged')
+}
+
+// ===================================================================
+// Phase 4 — Bridge message handling (PR #43)
+// ===================================================================
+
+describe('Bridge — keep_alive message is silently ignored')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-ka', result: 'existing', status: 'running' }
+
+  // keep_alive should return without affecting currentTask
+  b._onMessage({ type: 'keep_alive' })
+  assert(b.currentTask !== null, 'currentTask not cleared')
+  assert(b.currentTask.result === 'existing', 'result not modified')
+  assert(b.currentTask.id === 't-ka', 'task id unchanged')
+}
+
+describe('Bridge — keep_alive with no currentTask does not throw')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = null
+
+  // Should not throw
+  b._onMessage({ type: 'keep_alive' })
+  assert(true, 'keep_alive with no task does not throw')
+}
+
+describe('Bridge — system/init extracts session_id during task')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-init', result: '', status: 'running' }
+
+  assert(b._sessionId === undefined, 'sessionId starts undefined')
+  b._onMessage({ type: 'system', subtype: 'init', session_id: 'sess-abc-123' })
+  assert(b._sessionId === 'sess-abc-123', 'sessionId extracted from init message')
+}
+
+describe('Bridge — system/init without session_id sets undefined')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-init2', result: '', status: 'running' }
+
+  b._onMessage({ type: 'system', subtype: 'init' })
+  assert(b._sessionId === undefined, 'sessionId undefined when not in message')
+}
+
+describe('Bridge — stream_event accumulates text deltas')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-se', result: '', status: 'running' }
+
+  b._onMessage({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello ' } },
+  })
+  assert(b.currentTask.result === 'Hello ', 'first delta accumulated')
+
+  b._onMessage({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'World' } },
+  })
+  assert(b.currentTask.result === 'Hello World', 'second delta concatenated')
+}
+
+describe('Bridge — stream_event ignores non-text deltas')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-se-ignore', result: '', status: 'running' }
+
+  // input_json delta (not text_delta) — should be ignored
+  b._onMessage({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial: '{}' } },
+  })
+  assert(b.currentTask.result === '', 'non-text delta ignored')
+
+  // Missing delta — should be ignored
+  b._onMessage({
+    type: 'stream_event',
+    event: { type: 'content_block_start' },
+  })
+  assert(b.currentTask.result === '', 'event without delta ignored')
+}
+
+describe('Bridge — stream_event with no currentTask does not throw')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = null
+
+  b._onMessage({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'should not crash' } },
+  })
+  assert(true, 'stream_event with no task does not throw')
+}
+
+// ===================================================================
+// Phase 3 — Fix: U+2028/U+2029 escape
+// ===================================================================
+
+describe('Bridge — U+2028 line separator in JSON')
+{
+  const LS = String.fromCharCode(0x2028);
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-2028', result: '' }
+  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'before' + LS + 'after' }] } })
+  assert(b.currentTask.result.includes('before'), 'text before U+2028 preserved')
+  assert(b.currentTask.result.includes('after'), 'text after U+2028 preserved')
+  assert(b.currentTask.result.includes(LS), 'U+2028 preserved in result')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+describe('Bridge — U+2029 paragraph separator in JSON')
+{
+  const PS = String.fromCharCode(0x2029);
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-2029', result: '' }
+  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'line1' + PS + 'line2' }] } })
+  assert(b.currentTask.result.includes('line1'), 'text before U+2029 preserved')
+  assert(b.currentTask.result.includes('line2'), 'text after U+2029 preserved')
+  assert(b.currentTask.result.includes(PS), 'U+2029 preserved in result')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+// ===================================================================
+// Phase 3 — Fix: NDJSON guard (non-JSON to stderr)
+// ===================================================================
+
+describe('Bridge — NDJSON guard: valid JSON reaches handler')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  let onMessageCalled = false
+  const origOnMsg = b._onMessage.bind(b)
+  b._onMessage = (msg) => { onMessageCalled = true; origOnMsg(msg) }
+  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'valid' }] } })
+  assert(onMessageCalled, 'valid JSON still reaches onMessage')
+}
+
+// ===================================================================
+// Phase 3 — Fix: control_request handling
+// ===================================================================
+
+describe('Bridge — control_request: respond with control_response')
+{
+  const b = new Bridge()
+  let lastWritten = null
+  b.transport = { write: async (msg) => { lastWritten = msg } }
+  b._onMessage({ type: 'control_request', request_id: 'r1', request: { subtype: 'initialize' } })
+  assert(lastWritten !== null, 'control_response was sent')
+  assert(lastWritten.type === 'control_response', 'response type is control_response')
+  assert(lastWritten.response_id === 'r1', 'response_id matches request_id')
+  assert(lastWritten.response.subtype === 'success', 'response subtype is success')
+}
+
+describe('Bridge — control_request: handled without currentTask')
+{
+  const b = new Bridge()
+  let lastWritten = null
+  b.transport = { write: async (msg) => { lastWritten = msg } }
+  assert(b.currentTask === null, 'no current task')
+  b._onMessage({ type: 'control_request', request_id: 'r2', request: { subtype: 'set_model' } })
+  assert(lastWritten !== null, 'control_response sent without currentTask')
+  assert(lastWritten.response_id === 'r2', 'correct request_id echoed')
+}
+
+
+describe('Bridge — control_request: missing fields handled gracefully')
+{
+  const b = new Bridge()
+  let lastWritten = null
+  b.transport = { write: async (msg) => { lastWritten = msg } }
+  b._onMessage({ type: 'control_request' })
+  assert(lastWritten === null || lastWritten.type === 'control_response',
+    'missing request_id does not crash')
+}
+
+// ===================================================================
+// Phase 3 — Fix: session_state_changed to task status
+// ===================================================================
+
+describe('Bridge — session_state_changed: idle finishes task')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-session', result: 'done', status: 'running' }
+  b._onMessage({ type: 'session_state_changed', state: 'idle' })
+  assert(b.currentTask === null, 'task finished after session idle')
+  const stored = b.getTaskOutput('t-session')
+  assert(stored.task.status === 'done', 'task marked done')
+}
+
+describe('Bridge — session_state_changed: idle without task is no-op')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  assert(b.currentTask === null, 'no current task')
+  b._onMessage({ type: 'session_state_changed', state: 'idle' })
+  assert(true, 'idle state without task does not throw')
+}
+
+describe('Bridge — session_state_changed: non-idle state is no-op')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-running', result: '', status: 'running' }
+  b._onMessage({ type: 'session_state_changed', state: 'thinking' })
+  assert(b.currentTask !== null, 'task not finished for non-idle state')
+  assert(b.currentTask.id === 't-running', 'task still running')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+// ===================================================================
+// Phase 3 — Fix: tool_use / tool_result block support
+// ===================================================================
+
+describe('Bridge — tool_use block captured in result')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-tool-use', result: '', status: 'running' }
+  b._onMessage({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'text', text: 'Calling tool...' },
+        { type: 'tool_use', name: 'read_file', input: { path: '/tmp/x' } },
+      ],
+    },
+  })
+  assert(b.currentTask.result.includes('Calling tool...'), 'text preserved')
+  assert(b.currentTask.result.includes('read_file'), 'tool_use name captured')
+  assert(b.currentTask.result.includes('/tmp/x'), 'tool_use input captured')
+  assert(b.currentTask.result.includes('tool_use'), 'tool_use tag present')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+describe('Bridge — tool_result block captured in result')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-tool-res', result: '', status: 'running' }
+  b._onMessage({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'text', text: 'Result: ' },
+        { type: 'tool_result', content: 'file contents here', tool_use_id: 'call_1' },
+      ],
+    },
+  })
+  assert(b.currentTask.result.includes('Result:'), 'text preserved')
+  assert(b.currentTask.result.includes('file contents here'), 'tool_result string content captured')
+  assert(b.currentTask.result.includes('tool_result'), 'tool_result tag present')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+describe('Bridge — tool_result with array content blocks')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-tool-res-arr', result: '', status: 'running' }
+  b._onMessage({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'tool_result', content: [{ type: 'text', text: 'multi' }, { type: 'text', text: 'block' }] },
+      ],
+    },
+  })
+  assert(b.currentTask.result.includes('multi'), 'first sub-block text')
+  assert(b.currentTask.result.includes('block'), 'second sub-block text')
+  assert(!b.currentTask.result.includes('[object Object]'), 'no raw objects in result')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+describe('Bridge — tool_use + tool_result: progressive text followed by tool block')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-tool-prog2', result: '', status: 'running' }
+  // Progressive text streaming (no tool blocks yet)
+  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1' }] } })
+  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1 done' }] } })
+  assert(b.currentTask.result.includes('Step 1 done'), 'progressive text accumulated')
+  // Final message with tool_use (separate message.id, fresh delta)
+  b._onMessage({ type: 'assistant', message: { id: 'msg-2', content: [{ type: 'text', text: 'Calling tool' }, { type: 'tool_use', name: 'read', input: {} }] } })
+  assert(b.currentTask.result.includes('Calling tool'), 'text with tool_use captured')
+  assert(b.currentTask.result.includes('read'), 'tool_use name captured in progressive stream')
+  b._onMessage({ stop_reason: 'end_turn' })
+}
+
+// ===================================================================
 // Summary
 // ===================================================================
 
