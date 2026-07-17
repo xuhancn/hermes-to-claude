@@ -21,6 +21,10 @@
 
 import { createHash } from "crypto";
 import http from "http";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+import { execSync } from "child_process";
 
 /** Deterministic port matching home.mjs homePort(). */
 function portFromCwd(cwd) {
@@ -47,13 +51,19 @@ function livenessCheck(port) {
 async function main() {
   const port = portFromCwd(process.cwd());
   const alive = await livenessCheck(port);
+  const hbStatus = alive ? `▶️ hbridge: on | :${port}` : `⏹️ hbridge: off`;
 
-  if (!alive) {
-    console.log("⏹️ hbridge: off");
-    return;
+  // If user has a saved custom statusLine command, run it and attach hbridge status
+  const userCmdFile = join(homedir(), ".hbridge_user_statusline_cmd");
+  let userPart = "";
+  if (existsSync(userCmdFile)) {
+    try {
+      const cmd = readFileSync(userCmdFile, "utf8").trim();
+      if (cmd) userPart = execSync(cmd, { encoding: "utf8", timeout: 2000 }).trim();
+    } catch { /* user command failed — skip */ }
   }
 
-  console.log(`▶️ hbridge: on | :${port}`);
+  console.log(userPart ? `${userPart} │ ${hbStatus}` : hbStatus);
 }
 
 main();

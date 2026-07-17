@@ -1,9 +1,22 @@
 import http from "http";
 import { randomUUID } from "crypto";
 import { execSync } from "child_process";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { homedir } from "os";
 import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
+
+// ─── Paths for status bar toggle ────────────────────────────────────────
+
+const distDir = dirname(fileURLToPath(import.meta.url));
+const HBRIDGE_STATUSLINE_CMD = `node ${join(distDir, "statusline.mjs")}`;
+const USER_SETTINGS = join(homedir(), ".claude", "settings.json");
+const USER_CMD_FILE = join(homedir(), ".hbridge_user_statusline_cmd");
+
+// ─── MCP server ─────────────────────────────────────────────────────────
 
 export function startMcpServer() {
   // Global crash protection — keep MCP alive even if something slips through
@@ -88,6 +101,44 @@ function handleMcp(msg, key, bridge) {
           t += ` | Last: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
         }
       }
+    } else if (name === "hbridge_status_bar") {
+      const action = params?.arguments?.action;
+      if (!action || !["on", "off"].includes(action)) {
+        throw new Error('action must be "on" or "off"');
+      }
+
+      let settings = {};
+      if (existsSync(USER_SETTINGS)) {
+        settings = JSON.parse(readFileSync(USER_SETTINGS, "utf8"));
+      }
+
+      if (action === "on") {
+        const currentCmd = settings.statusLine?.command || "";
+        // Save user's command (unless it's already hbridge's wrapper)
+        if (currentCmd && !currentCmd.includes("statusline.mjs")) {
+          mkdirSync(dirname(USER_CMD_FILE), { recursive: true });
+          writeFileSync(USER_CMD_FILE, currentCmd, "utf8");
+        }
+        settings.statusLine = { type: "command", command: HBRIDGE_STATUSLINE_CMD };
+        t = "hbridge status bar ON — attached to your status bar";
+      } else {
+        // Restore user's original command
+        if (existsSync(USER_CMD_FILE)) {
+          const userCmd = readFileSync(USER_CMD_FILE, "utf8").trim();
+          if (userCmd) {
+            settings.statusLine = { type: "command", command: userCmd };
+          } else {
+            delete settings.statusLine;
+          }
+          writeFileSync(USER_CMD_FILE, "", "utf8");
+        } else {
+          delete settings.statusLine;
+        }
+        t = "hbridge status bar OFF";
+      }
+
+      mkdirSync(dirname(USER_SETTINGS), { recursive: true });
+      writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
     }
     respond({
       jsonrpc: "2.0",
@@ -235,6 +286,17 @@ const TOOLS = [
     name: "hbridge_status",
     description: "Show hbridge server status",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hbridge_status_bar",
+    description: "Show/hide hbridge status in Claude Code status bar (attaches to your existing bar)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["on", "off"] },
+      },
+      required: ["action"],
+    },
   },
 ];
 

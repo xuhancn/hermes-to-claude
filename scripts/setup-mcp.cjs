@@ -35,27 +35,6 @@ try {
   fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
   console.log("✓ hbridge MCP config updated");
 
-  // ---- statusLine hook (user ~/.claude/settings.json — higher priority) ----
-  const STATUSBAR_PATH = path.join(__dirname, "..", "dist", "statusline.mjs");
-  const cmd = `node ${STATUSBAR_PATH}`;
-
-  let settings = {};
-  if (fs.existsSync(USER_SETTINGS)) {
-    settings = JSON.parse(fs.readFileSync(USER_SETTINGS, "utf8"));
-  }
-
-  settings.statusLine = settings.statusLine || {};
-  settings.statusLine.type = "command";
-  // Only overwrite if the current command is NOT already our statusline
-  // (preserves user-customized statusLine that happens to be the same)
-  if (settings.statusLine.command !== cmd) {
-    settings.statusLine.command = cmd;
-  }
-
-  fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
-  fs.writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
-  console.log("✓ hbridge statusLine registered");
-
   // ---- /hbridge slash command skill (global ~/.claude/skills/hbridge/) ----
   const SKILL_SRC = path.join(__dirname, "..", ".claude", "skills", "hbridge", "SKILL.md");
   const SKILL_DST = path.join(USER_SKILL_DIR, "SKILL.md");
