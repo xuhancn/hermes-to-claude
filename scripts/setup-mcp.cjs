@@ -9,6 +9,12 @@ const USER_SETTINGS = path.join(
   ".claude",
   "settings.json",
 );
+const USER_SKILL_DIR = path.join(
+  process.env.HOME || os.homedir(),
+  ".claude",
+  "skills",
+  "hbridge",
+);
 const HBRIDGE_ENTRY = {
   command: path.join(__dirname, "..", "dist", "hbridge.mjs"),
   args: ["--stdio"],
@@ -48,6 +54,18 @@ try {
   fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
   fs.writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
   console.log("✓ hbridge statusLine registered");
+
+  // ---- /hbridge slash command skill (global ~/.claude/skills/hbridge/) ----
+  const SKILL_SRC = path.join(__dirname, "..", ".claude", "skills", "hbridge", "SKILL.md");
+  const SKILL_DST = path.join(USER_SKILL_DIR, "SKILL.md");
+
+  if (fs.existsSync(SKILL_SRC)) {
+    fs.mkdirSync(USER_SKILL_DIR, { recursive: true });
+    fs.copyFileSync(SKILL_SRC, SKILL_DST);
+    console.log("✓ hbridge slash command installed (/hbridge)");
+  } else {
+    console.warn("⚠ hbridge skill file not found — skipping slash command install");
+  }
 } catch (e) {
   console.error("⚠ Could not register hbridge in Claude Code config:", e.message);
   console.error("  Add manually: /mcp add hbridge -- hbridge --stdio");
