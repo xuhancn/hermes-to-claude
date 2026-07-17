@@ -35,26 +35,26 @@ try {
   fs.writeFileSync(CONFIG, JSON.stringify(config, null, 2));
   console.log("✓ hbridge MCP config updated");
 
-  // ---- statusLine hook (user ~/.claude/settings.json — higher priority) ----
+  // ---- statusLine hook (default ON — attaches to user's existing bar) ----
   const STATUSBAR_PATH = path.join(__dirname, "..", "dist", "statusline.mjs");
   const cmd = `node ${STATUSBAR_PATH}`;
+  const USER_CMD_FILE = path.join(os.homedir(), ".hbridge_user_statusline_cmd");
 
   let settings = {};
   if (fs.existsSync(USER_SETTINGS)) {
     settings = JSON.parse(fs.readFileSync(USER_SETTINGS, "utf8"));
   }
 
-  settings.statusLine = settings.statusLine || {};
-  settings.statusLine.type = "command";
-  // Only overwrite if the current command is NOT already our statusline
-  // (preserves user-customized statusLine that happens to be the same)
-  if (settings.statusLine.command !== cmd) {
-    settings.statusLine.command = cmd;
+  // Save existing user command so statusline.mjs can combine with it
+  if (settings.statusLine?.command && settings.statusLine.command !== cmd) {
+    fs.mkdirSync(path.dirname(USER_CMD_FILE), { recursive: true });
+    fs.writeFileSync(USER_CMD_FILE, settings.statusLine.command, "utf8");
   }
+  settings.statusLine = { type: "command", command: cmd };
 
   fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
   fs.writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
-  console.log("✓ hbridge statusLine registered");
+  console.log("✓ hbridge statusLine registered (attaches to existing bar)");
 
   // ---- /hbridge slash command skill (global ~/.claude/skills/hbridge/) ----
   const SKILL_SRC = path.join(__dirname, "..", ".claude", "skills", "hbridge", "SKILL.md");
