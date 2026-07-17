@@ -45,9 +45,14 @@ export function homePort(cwd) {
  * @param {string} [_cwd] — accepted for backward compatibility, ignored.
  */
 export function homeKey(_cwd) {
+  // Read first — if file exists with a valid key, return it
   if (existsSync(KEY_FILE)) {
-    return readFileSync(KEY_FILE, "utf8").trim();
+    const existing = readFileSync(KEY_FILE, "utf8").trim();
+    if (existing && existing.startsWith("hb_")) {
+      return existing;
+    }
   }
+  // Generate a new key if file missing, empty, or contains garbage
   const bytes = randomBytes(8);
   let key = "hb_";
   for (const byte of bytes) {
