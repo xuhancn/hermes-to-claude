@@ -4,14 +4,9 @@ Local HTTP bridge connecting **Hermes Agent** to **Claude Code** via a persisten
 
 ```
 Hermes ──HTTP──▶ hbridge:9190 ──stdio──▶ Claude Code (persistent --print --verbose)
+  (remote)                  (NDJSON)      stdin: {"type":"user","session_id":"","message":{"role":"user","content":"fix bug"},"parent_tool_use_id":null}
+                                          stdout: {"role":"assistant","content":[{"type":"text","text":"Done."}]}
 ```
-
-**Use cases:**
-
-- **Bug fix**: Hermes hits a codebase-specific bug → delegates to Claude Code → Claude reads the files, fixes, and returns the diff.
-- **Cross-file refactor**: Hermes understands intent but not the codebase → hbridge passes the task → Claude edits multiple files, runs tests, confirms.
-- **Skill execution**: Hermes triggers a CLAUDE.md skill (e.g. "run deploy verify") → Claude loads the skill, executes the workflow, reports back.
-- **Offload code review**: Hermes generates a patch → sends to Claude for review via hbridge → gets structured feedback before applying.
 
 ## Advanced of hbridge
 
