@@ -71,6 +71,14 @@ export class Bridge {
     /** @type {Map<string, Set<{ write: (data: string) => void }>>} */
     this._taskSubscribers = new Map();
 
+    // ── Progressive streaming — track text per message.id ──
+    /** @type {Map<string, { lastText: string }>} */
+    this._msgTextProgress = new Map();
+
+    // ── Multi-turn auto-respond ──
+    this._autoRespondCount = 0;
+    this._maxAutoRespond = 5;
+
     // ── Auto-reconnect state ──
     /** @type {number} */
     this._reconnectAttempts = 0;
@@ -180,20 +188,59 @@ export class Bridge {
 
     if (!this.currentTask) return;
 
-    // Claude API format: {role:"assistant", content:[{type:"text",text:"..."}]}
-    // MCP format: {type:"assistant", message:{content:[{type:"text",text:"..."}]}}
-    const content = msg.content || (msg.message && msg.message.content);
-    if (content) {
-      for (const block of content) {
+    // ── Progressive streaming ──────────────────────────────────────
+    // Claude Code sends the FULL content array in each update (same message.id).
+    // Track per-message progress to extract only the delta text.
+    const msgId = /** @type {string|undefined} */ (msg.message?.id || msg.id);
+    const blocks = msg.content || (msg.message && msg.message.content);
+
+    if (blocks) {
+      // Concatenate all text blocks into one string
+      let fullText = '';
+      for (const block of blocks) {
         if (block.type === "text") {
-          this.currentTask.result += block.text;
-          // Emit text chunk to SSE subscribers
-          this._emitTaskChunk(this.currentTask.id, block.text);
+          fullText += block.text;
+        }
+      }
+
+      if (fullText) {
+        // Compute delta against what we've already seen for this message ID
+        const prev = msgId ? this._msgTextProgress.get(msgId) : null;
+        const prevText = prev?.lastText || '';
+        const delta = fullText.slice(prevText.length);
+
+        if (delta) {
+          this.currentTask.result += delta;
+          this._emitTaskChunk(this.currentTask.id, delta);
+        }
+
+        // Update progress (even if delta is empty — avoid re-processing)
+        if (msgId) {
+          if (prev) {
+            prev.lastText = fullText;
+          } else {
+            this._msgTextProgress.set(msgId, { lastText: fullText });
+          }
         }
       }
     }
 
-    // Completion signals
+    // ── Multi-turn: auto-respond when Claude asks a question ──────
+    if (msg.type === "user") {
+      if (this._autoRespondCount < this._maxAutoRespond) {
+        this._autoRespondCount++;
+        process.stderr.write(`[bridge] auto-respond #${this._autoRespondCount}/${this._maxAutoRespond}\n`);
+        this.transport?.write({
+          type: "user",
+          session_id: /** @type {string} */ (msg.session_id ?? ""),
+          message: { role: "user", content: "Continue. Do not ask for confirmation." },
+          parent_tool_use_id: null,
+        }).catch(() => {});
+      }
+      return; // user-type messages are not completion signals
+    }
+
+    // ── Completion signals ─────────────────────────────────────────
     if (msg.stop_reason || msg.type === "result" || msg.subtype === "success") {
       this._finishTask(0);
     }
@@ -294,6 +341,9 @@ export class Bridge {
       exitCode: null,
     };
     this.busy = true;
+    // Reset per-task streaming state
+    this._msgTextProgress.clear();
+    this._autoRespondCount = 0;
     writeState({ latestTask: { id, prompt, status: "running" } });
 
     const taskDone = new Promise((resolve) => {
