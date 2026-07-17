@@ -48,7 +48,14 @@ const KEEPALIVE_INTERVAL_MS = 30_000;  // send keep_alive every 30s
 const LIVENESS_TIMEOUT_MS = 120_000;   // treat as dead after 2min silence
 
 export class Bridge {
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.cwd] - Working directory for spawned Claude Code process
+   */
+  constructor(opts = {}) {
+    /** Working directory for the child process. */
+    this._cwd = opts.cwd || undefined;
+
     this.child = null;
     this.busy = false;
     this.currentTask = null;
@@ -78,6 +85,8 @@ export class Bridge {
     // ── Session tracking ──
     /** @type {string|undefined} */
     this._sessionId = undefined;
+    /** @type {string|undefined} */
+    this._cwd = undefined;
 
     // ── Multi-turn auto-respond ──
     this._autoRespondCount = 0;
@@ -105,7 +114,10 @@ export class Bridge {
    * Uses state machine — safe to call even if already connected.
    * @returns {Promise<boolean>} true if connected successfully
    */
-  async _startClaude() {
+  /**
+   * @param {{ cwd?: string }} [opts]
+   */
+  async _startClaude(opts = {}) {
     // Already connected — nothing to do
     if (this._state === STATE.CONNECTED && this.child && !this.child.killed) {
       return true;
@@ -119,6 +131,10 @@ export class Bridge {
     this._state = STATE.CONNECTING;
     this._ready = false;
 
+    // Use provided cwd, or stored cwd, or default to process.cwd()
+    const cwd = opts.cwd || this._cwd || process.cwd();
+    this._cwd = cwd;
+
     const isWin = process.platform === "win32";
     const cmd = isWin ? "cmd.exe" : "npx";
     const args = isWin ? ["/d", "/s", "/c", `npx.cmd ${CLAUDE_ARGS.join(" ")}`] : CLAUDE_ARGS;
@@ -126,6 +142,7 @@ export class Bridge {
     try {
       this.child = spawn(cmd, args, {
         stdio: ["pipe", "pipe", "pipe"],
+        cwd,
         env: { ...process.env },
       });
     } catch (err) {
@@ -372,7 +389,13 @@ export class Bridge {
     }
   }
 
-  async createTask(prompt, taskId) {
+  /**
+   * Create a new task.
+   * @param {string} prompt
+   * @param {string} [taskId]
+   * @param {{ cwd?: string }} [opts]
+   */
+  async createTask(prompt, taskId, opts = {}) {
     const id = taskId || `task_${randomUUID()}`;
 
     // Guard: if reconnection budget exhausted, reject immediately
@@ -393,11 +416,18 @@ export class Bridge {
     }
 
     // Ensure Claude is running (state machine handles concurrency)
+    // Pass cwd so the child process spawns in the right directory
     if (this._state !== STATE.CONNECTED) {
-      const ok = await this._startClaude();
+      const ok = await this._startClaude({ cwd: opts.cwd });
       if (!ok) {
         throw new Error('Failed to start Claude process');
       }
+    } else if (opts.cwd && opts.cwd !== this._cwd) {
+      // cwd changed — restart Claude with new cwd
+      process.stderr.write(`[bridge] cwd changed (${this._cwd} → ${opts.cwd}), restarting\n`);
+      this._cleanupProcess();
+      const ok = await this._startClaude({ cwd: opts.cwd });
+      if (!ok) throw new Error('Failed to restart Claude with new cwd');
     }
 
     // Queue: wait for previous task to finish
@@ -455,6 +485,34 @@ export class Bridge {
     }
 
     return { task_id: id, status: "created" };
+  }
+
+  /**
+   * Cancel a running task by ID.
+   * @param {string} taskId
+   * @returns {boolean} true if the task was found and cancelled
+   */
+  cancelTask(taskId) {
+    // Check current task
+    if (this.currentTask && this.currentTask.id === taskId) {
+      process.stderr.write(`[bridge] cancelling task ${taskId}\n`);
+      // Send interrupt control request to Claude Code
+      this.transport?.write({
+        type: "control_request",
+        request_id: `cancel_${taskId}`,
+        request: { subtype: "interrupt" },
+      }).catch(() => {});
+      this._failTask("cancelled");
+      return true;
+    }
+
+    // Check completed tasks (remove from results)
+    if (this._results.has(taskId)) {
+      this._results.delete(taskId);
+      return true;
+    }
+
+    return false;
   }
 
   getTask(taskId) {
