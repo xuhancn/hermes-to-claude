@@ -1,5 +1,7 @@
 # /h2c status
 
+> Run the h2c command directly — no exploration.
+
 Show the current h2c server status, including server version, port, key, LAN IPs, and last client connection info.
 
 ## Usage

@@ -1,5 +1,7 @@
 # /h2c status_bar
 
+> Run the h2c command directly — no exploration.
+
 Show or hide the h2c status indicator in the Claude Code status bar (bottom-right corner). When enabled, h2c attaches to any existing status bar you may have configured.
 
 ## Usage
