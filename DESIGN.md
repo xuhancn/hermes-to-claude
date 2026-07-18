@@ -10,7 +10,7 @@ npm install
   ├─ install: npm deps
   └─ postinstall: register statusLine + skill in ~/.claude configs
 
-hbridge --enable
+/hbridge enable
   └─ HTTP server on homePort(cwd)
        ├─ GET  /health                   → {"status":"ok"}
        ├─ POST /v1/task/create            → Bridge.createTask(prompt)

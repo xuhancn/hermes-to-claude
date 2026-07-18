@@ -1,11 +1,22 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { homedir } from "os";
+import { homedir, networkInterfaces } from "os";
 import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
 import { createServer } from "./server.mjs";
+
+function getLocalIPs() {
+  const ips = [];
+  const ifaces = networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === "IPv4" && !iface.internal) ips.push(iface.address);
+    }
+  }
+  return ips;
+}
 
 // ─── Paths for status bar toggle ────────────────────────────────────────
 
@@ -109,7 +120,11 @@ function handleMcp(msg, key) {
         httpServer.listen(port);
       }
       markRunning(port);
-      t = k;
+      const ips = getLocalIPs();
+      const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
+      t = `hbridge enabled
+📂 ${process.cwd()}
+🔑 ${ip}:${port} | ${k} | ${HBRIDGE_VERSION}`;
     } else if (name === "hbridge_disable") {
       if (httpServer) {
         const srv = httpServer;
@@ -126,9 +141,13 @@ function handleMcp(msg, key) {
         t = "hbridge stopped";
       } else {
         const port = state.port || homePort(process.cwd());
+        const ips2 = getLocalIPs();
+        const ip2 = isHome() ? "127.0.0.1" : (ips2[0] || "127.0.0.1");
         t = `hbridge running on :${port}`;
+        t += `\n📂 ${process.cwd()}`;
+        t += `\n🔑 ${ip2}:${port}`;
         if (state.lastClientIP) {
-          t += ` | Last: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
+          t += `\nLast client: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
         }
       }
     } else if (name === "hbridge_status_bar") {
@@ -195,7 +214,7 @@ let httpServer = null;
 const TOOLS = [
   {
     name: "hbridge_enable",
-    description: "Start hbridge server and generate access key",
+    description: "Start hbridge server. Always display the full output: cwd, IP, port, key, and version.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -208,7 +227,7 @@ const TOOLS = [
   },
   {
     name: "hbridge_status",
-    description: "Show hbridge server status",
+    description: "Show hbridge server status. Display: port, cwd, IP, and last client.",
     inputSchema: { type: "object", properties: {} },
   },
   {
