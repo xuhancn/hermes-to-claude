@@ -78,17 +78,17 @@ function showHelp() {
   h2c — Hermes Bridge
 
   COMMANDS:
-    h2c --enable         Start bridge with deterministic key
-    h2c --disable        Stop bridge
-    h2c --status         Show status + last client connection
-    h2c --help           Show this help
+    h2c enable          Start bridge with deterministic key
+    h2c disable         Stop bridge
+    h2c status          Show status + last client connection
+    h2c help            Show this help
 
   Port is derived from the working directory; key is machine-global from ~/.h2c_key.
   Home mode (H2C_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:
-    h2c --enable         Enable with dir-derived key
-    h2c --status         Show connected IP + last active time
+    h2c enable          Enable with dir-derived key
+    h2c status          Show connected IP + last active time
   `);
   process.exit(0);
 }
@@ -99,14 +99,14 @@ const cmd = args[0];
 // Home mode: auto-start HTTP server directly
 if (isHome()) {
   cmd_enable();
-} else if (cmd === "--enable") cmd_enable();
-else if (cmd === "--disable") cmd_disable();
-else if (cmd === "--status") cmd_status();
-else if (cmd === "--help" || cmd === "-h") { showHelp(); }
+} else if (cmd === "enable") cmd_enable();
+else if (cmd === "disable") cmd_disable();
+else if (cmd === "status") cmd_status();
+else if (cmd === "help" || cmd === "-h") { showHelp(); }
 else {
   console.log("h2c — Hermes Bridge");
-  console.log("  h2c --enable           Start bridge");
-  console.log("  h2c --disable          Stop bridge");
-  console.log("  h2c --status           Show status");
-  console.log("  h2c --help             Show help");
+  console.log("  h2c enable            Start bridge");
+  console.log("  h2c disable           Stop bridge");
+  console.log("  h2c status            Show status");
+  console.log("  h2c help              Show help");
 }
