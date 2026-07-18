@@ -58,7 +58,7 @@ const TEST_PATHS = [
   "/var/log/app",
   "/data/db/collection",
   "C:\\Users\\test\\project",
-  "D:\\xu_git\\hermes-claude-bridge",
+  "D:\\xu_git\\hermes-claude-connector",
   "/very/long/path/that/should/work/fine/without/any/issues",
   "/unicode/路径/测试",
   "/mixed/Case/PATH/test",
@@ -131,7 +131,7 @@ for (const dir of ["/a", "/b", "/test"]) {
 // These values must never change for the same input.
 assert(homePort("/tmp/test") === 9352, 'homePort("/tmp/test") === 9352');
 assert(homePort("/home/user/project") === 9578, 'homePort("/home/user/project") === 9578');
-assert(homePort("D:/xu_git/hermes-claude-bridge") === 9330, 'homePort("D:/xu_git/hermes-claude-bridge") === 9330');
+assert(homePort("D:/xu_git/hermes-claude-connector") === 9330, 'homePort("D:/xu_git/hermes-claude-connector") === 9330');
 
 // Cleanup
 process.env.HBRIDGE_HOME = saved;
