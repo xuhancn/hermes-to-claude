@@ -70,10 +70,11 @@ npm install -g .               # optional: global hbridge command
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable` | Start server with random persistent key (auto-starts without flag when `HBRIDGE_HOME=1`) |
-| `hbridge --disable` | Stop server (disabled in home mode) |
+| `hbridge --enable` | Start server with random persistent key |
+| `hbridge --disable` | Stop server |
 | `hbridge --status` | Show server status + last client connection |
-| `hbridge --stdio` | Run as MCP server (stdin/stdout) |
+
+When `HBRIDGE_HOME=1`, the server auto-starts — no subcommand needed.
 
 Port is derived deterministically from cwd. Key is random, generated once and persisted in `~/.hbridge_key` (machine-global — same key for all directories).
 All endpoints except `/health` require the key via **HTTP Basic Auth** (`user:hb_xxxx` base64-encoded).

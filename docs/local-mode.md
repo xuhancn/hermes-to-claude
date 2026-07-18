@@ -16,7 +16,7 @@ Claude → read CLAUDE.md → load skill → execute → respond
 Hermes sets the environment variable `HBRIDGE_HOME=1` and hbridge picks it up automatically — zero user action. No MCP config changes, no Claude involvement needed.
 
 ```bash
-HBRIDGE_HOME=1 node dist/hbridge.mjs --stdio
+HBRIDGE_HOME=1 node dist/hbridge.mjs
 ```
 
 When running as a standalone CLI, hbridge auto-starts if no subcommand is given and `HBRIDGE_HOME=1`:

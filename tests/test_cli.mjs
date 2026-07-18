@@ -13,31 +13,32 @@ function cli(args) {
   const cmd = args[0], sub = args[1], val = args[2];
   const home = process.env.HBRIDGE_HOME == 1;
 
-  // Home mode blocks manual enable/disable
-  if (home && (cmd === "--enable" || cmd === "--disable")) {
-    return "Home mode active — manual control disabled";
-  }
+  // Home mode: auto-start HTTP server directly (--stdio not needed)
+  if (home) return "enable(auto)";
   if (cmd === "--enable") return `enable(${sub})`;
   if (cmd === "--disable") return "disable";
   if (cmd === "--status") return "status";
   if (cmd === "--help" || cmd === "-h") return "help";
   if (cmd === "--user") return `user(${sub}, ${val})`;
-  // Auto-start in home mode when no command given
   return "unknown";
 }
 
 const saved = process.env.HBRIDGE_HOME;
 
-// ── Home mode blocks manual --enable ──────────────────────────
+// ── Home mode auto-starts (no manual cmd needed) ──────────────────
 process.env.HBRIDGE_HOME = "1";
-assert(cli(["--enable"]) === "Home mode active — manual control disabled",
-  "HBRIDGE_HOME=1 --enable blocked");
-assert(cli(["--enable", "xu"]) === "Home mode active — manual control disabled",
-  "HBRIDGE_HOME=1 --enable xu blocked");
+assert(cli(["--enable"]) === "enable(auto)",
+  "HBRIDGE_HOME=1 --enable -> enable(auto)");
+assert(cli(["--stdio"]) === "enable(auto)",
+  "HBRIDGE_HOME=1 --stdio -> enable(auto)");
 
-// ── Home mode blocks manual --disable ─────────────────────────
-assert(cli(["--disable"]) === "Home mode active — manual control disabled",
-  "HBRIDGE_HOME=1 --disable blocked");
+// ── Home mode auto-starts even with any cmd ───────────────────────
+assert(cli(["--disable"]) === "enable(auto)",
+  "HBRIDGE_HOME=1 --disable -> enable(auto)");
+
+// ── Home mode auto-starts with no args ────────────────────────────
+assert(cli([]) === "enable(auto)",
+  "HBRIDGE_HOME=1 no args -> enable(auto)");
 
 // ── Home mode unset → normal operation ────────────────────────
 delete process.env.HBRIDGE_HOME;
