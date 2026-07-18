@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required",
   "license": "MIT",
-  "repository": "github:xuhancn/hermes-claude-bridge",
+  "repository": "github:xuhancn/hermes-to-claude",
   "bin": {
     "h2c": "dist/hbridge.mjs"
   },
