@@ -37,7 +37,7 @@ hbridge requires **Node.js ≥ 20**. Install it for your platform:
 
 ```bash
 git clone https://github.com/xuhancn/hermes-claude-connector.git
-cd hermes-claude-connector
+cd hermes-claude-bridge
 npm install && npm run build
 ```
 
@@ -79,27 +79,31 @@ The auth key (`hb_` + 8 random base52 characters) is written to `~/.hbridge_key`
 
 ## 3. For Hermes-Agent
 
-Hermes-Agent discovers and controls hbridge via HTTP. Here is the complete API:
+Hermes-Agent discovers and controls hbridge via HTTP. Here is the complete API.
 
-### Health Check
+### Security
 
-No authentication required.
-
-```bash
-curl http://127.0.0.1:<port>/health
-# → {"status":"ok"}
-```
+Like Claude Code CLI, hbridge requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads. Hermes-Agent must handle the same authentication and permission flow that human users would, or explicitly choose to bypass it.
 
 ### Create a Task
 
-Spawn a Claude Code session. Set `skip_permissions: true` for development workloads to bypass tool-approval prompts.
+Spawn a Claude Code session:
 
 ```bash
-curl -X POST http://127.0.0.1:<port>/v1/task/create \
+curl -X POST http://<host>:<port>/v1/task/create \
   -H "Authorization: Basic <base64(bridge:key)>" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "fix the off-by-one bug in main.c"}'
 # → {"task_id":"task_xxx","status":"created"}
+```
+
+To skip permission prompts for development workloads:
+
+```bash
+curl -X POST http://<host>:<port>/v1/task/create \
+  -H "Authorization: Basic <base64(bridge:key)>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "...", "skip_permissions": true}'
 ```
 
 | Optional field | Type | Description |
@@ -109,12 +113,23 @@ curl -X POST http://127.0.0.1:<port>/v1/task/create \
 | `cwd` | string | Working directory for the Claude session |
 | `sessionId` | string | Reuse an existing Claude session |
 
+### Health Check
+
+Verify the server is reachable — no authentication required:
+
+```bash
+curl http://<host>:<port>/health
+# → {"status":"ok"}
+```
+
+Check health after creating a task to confirm the bridge is running and ready.
+
 ### Get Task Output
 
 Poll until `status` is `"done"` or `"failed"`. Long-running tasks (code generation, test suites) may take minutes.
 
 ```bash
-curl "http://127.0.0.1:<port>/v1/task/output?task_id=task_xxx" \
+curl "http://<host>:<port>/v1/task/output?task_id=task_xxx" \
   -H "Authorization: Basic <base64(bridge:key)>"
 # → {"retrieval_status":"success","task":{"status":"done","result":"Fixed.","exitCode":0}}
 ```
@@ -122,7 +137,7 @@ curl "http://127.0.0.1:<port>/v1/task/output?task_id=task_xxx" \
 ### Cancel a Task
 
 ```bash
-curl -X POST http://127.0.0.1:<port>/v1/task/cancel \
+curl -X POST http://<host>:<port>/v1/task/cancel \
   -H "Authorization: Basic <base64(bridge:key)>" \
   -H "Content-Type: application/json" \
   -d '{"task_id":"task_xxx"}'
@@ -130,29 +145,78 @@ curl -X POST http://127.0.0.1:<port>/v1/task/cancel \
 
 ### Permission Pipeline
 
-Hermes-Agent can control which tools Claude Code is allowed to use:
+hbridge includes a full permission pipeline — just like CI tools. Hermes-Agent can decide per-task how to handle tool approvals:
 
 | Mode | Behavior |
 |------|----------|
 | `approve` (default) | Claude sends `control_request` → Hermes decides allow/deny |
-| `bypass` | Claude sends request but doesn't block; Hermes can still log |
-| `skip_permissions` | `--dangerously-skip-permissions` — no requests at all |
+| `bypass` | Claude sends request but doesn't block; Hermes can log for audit |
+| `skip_permissions` | `--dangerously-skip-permissions` — no requests, maximum speed |
 
-Hermes-Agent can also respond with `updatedInput` to modify tool parameters before Claude executes them.
+For quick development tasks, use `skip_permissions`. For production workloads that need an audit trail, keep the default `approve` mode. Hermes-Agent can also respond with `updatedInput` to modify tool parameters before Claude executes them.
 
 ### Architecture
 
 ```
 Hermes ──HTTP──▶ hbridge :<port> ──spawn──▶ Session (Claude Code)
-                      │                              │
-                      │  server.mjs (HTTP routing)    │  reads CLAUDE.md
-                      │  bridge.mjs (session pool)    │  loads skills
-                      │  session.mjs (per-task proc)  │  edits files
+  │                   │                              │
+  │  Control Layer    │  server.mjs (HTTP routing)    │  reads CLAUDE.md
+  │  (create/cancel/  │  bridge.mjs (session pool)    │  loads skills
+  │   output/poll)    │  session.mjs (per-task proc)  │  edits files
+  │                   │                              │
+  │  Transport Layer  │  StdioTransport               │
+  │  (SSE streaming)  │  (NDJSON stdin/stdout pipe)   │  Claude stdout
+  │                   │                              │
+  └─ poll or SSE ◀────┴─ task output (status/result) ─┘
 ```
 
-Hermes-Agent dispatches tasks; hbridge manages session lifecycle. Claude Code loads project-specific CLAUDE.md and skills from each working directory.
+Hermes-Agent dispatches tasks through two layers:
 
----
+- **Control Layer**: HTTP endpoints for task lifecycle — create, cancel, poll for results, health. This is what Sections 3.1–3.5 describe.
+- **Transport Layer**: Streaming, real-time progress, and persistent transcript via SSE and NDJSON. This is described below.
+
+Claude Code loads project-specific CLAUDE.md and skills from the working directory as a per-task child process. Each session is isolated.
+
+### Transport Layer
+
+Beyond polling `getTaskOutput`, Hermes-Agent can receive **real-time streaming** via Server-Sent Events (SSE) and read the raw Claude Code NDJSON transcript:
+
+#### SSE Streaming
+
+Subscribe to a task's output stream to receive events as they happen — no polling needed:
+
+```bash
+curl -N "http://<host>:<port>/v1/task/output/stream?task_id=task_xxx" \
+  -H "Authorization: Basic <base64(bridge:key)>"
+# event: chunk
+# data: {"task_id":"task_xxx","chunk":"Fixing the off-by-one...\n"}
+#
+# event: done
+# data: {"task_id":"task_xxx","status":"done","exitCode":0}
+```
+
+Event types pushed over SSE:
+
+| Event | Description |
+|-------|-------------|
+| `chunk` | Incremental text output from Claude Code |
+| `status` | Task status change (running → done / failed) |
+| `tool_progress` | Tool execution progress (tool name + elapsed time) |
+| `permission_request` | Claude requests tool approval (in `approve` mode) |
+
+#### NDJSON Transcript
+
+The raw Claude Code stdout is saved to `~/.hbridge_transcript.jsonl`. Each line is a complete NDJSON message from Claude Code — `assistant` messages, `stream_event` deltas, `tool_use` blocks, and `result` messages with usage data:
+
+```jsonl
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Fixing"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" the"}}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed the off-by-one error."}]}}
+{"type":"result","subtype":"success","result":"...","usage":{"input_tokens":120,"output_tokens":45}}
+```
+
+Hermes-Agent can tail this file for full Claude Code session history, or consume the SSE stream for live updates. The transport layer ensures no output is lost — even if the HTTP connection drops, the transcript file preserves every message.
+
 
 ### Document References
 
