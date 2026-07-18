@@ -4,7 +4,6 @@ import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
-import { Bridge } from "./bridge.mjs";
 
 const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
 let server = null;
@@ -17,7 +16,7 @@ function getLocalIPs() {
     .map(n => n.address);
 }
 
-async function cmd_enable(pm) {
+async function cmd_enable() {
   const cwd = process.cwd();
   const port = homePort(cwd);
   const key = homeKey(cwd);
@@ -28,7 +27,7 @@ async function cmd_enable(pm) {
   console.log("📂 " + cwd);
   console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
 
-  server = createServer(key, new Bridge({ permissionMode: pm || "approve" }));
+  server = createServer(key);
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
 
@@ -73,19 +72,17 @@ function showHelp() {
   hbridge — Hermes Bridge
 
   COMMANDS:
-    hbridge --enable                   Start bridge with deterministic key
-    hbridge --enable --permission-mode bypass|approve   Permission mode (default: approve)
-    hbridge --disable                  Stop bridge
-    hbridge --status                   Show status + last client connection
-    hbridge --help                     Show this help
+    hbridge --enable         Start bridge with deterministic key
+    hbridge --disable        Stop bridge
+    hbridge --status         Show status + last client connection
+    hbridge --help           Show this help
 
   Port and key are derived from the working directory.
   Home mode (HBRIDGE_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:
-    hbridge --enable                   Enable with dir-derived key (approve mode)
-    hbridge --enable --permission-mode bypass   Enable without permission prompts
-    hbridge --status                   Show connected IP + last active time
+    hbridge --enable         Enable with dir-derived key
+    hbridge --status         Show connected IP + last active time
   `);
   process.exit(0);
 }
@@ -93,17 +90,10 @@ function showHelp() {
 const args = process.argv.slice(2);
 const cmd = args[0];
 
-// Parse --permission-mode
-let permissionMode = "approve";
-const pmIdx = args.indexOf("--permission-mode");
-if (pmIdx !== -1 && args[pmIdx + 1] && ["bypass", "approve"].includes(args[pmIdx + 1])) {
-  permissionMode = args[pmIdx + 1];
-}
-
 // Home mode: auto-start HTTP server, block --stdio (not needed)
 if (isHome()) {
-  cmd_enable(permissionMode);
-} else if (cmd === "--enable") cmd_enable(permissionMode);
+  cmd_enable();
+} else if (cmd === "--enable") cmd_enable();
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--stdio") { startMcpServer(); }

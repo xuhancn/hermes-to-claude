@@ -26,7 +26,7 @@ const CLAUDE_ARGS = [
 
 const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
 const DEFAULT_MAX_AUTO_RESPOND = 5;
-const DEFAULT_PERMISSION_MODE = "bypass"; // "bypass" | "approve"
+const DEFAULT_PERMISSION_MODE = "approve"; // "bypass" | "approve"
 
 export class Session {
   /**
