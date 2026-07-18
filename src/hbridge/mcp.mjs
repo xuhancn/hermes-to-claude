@@ -7,6 +7,8 @@ import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
 import { createServer } from "./server.mjs";
 
+const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
+
 function getLocalIPs() {
   const ips = [];
   const ifaces = networkInterfaces();
