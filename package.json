@@ -1,10 +1,10 @@
 {
-  "name": "hermes-claude-connector",
+  "name": "hermes-claude-bridge",
   "version": "0.1.0",
   "type": "module",
   "description": "Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required",
   "license": "MIT",
-  "repository": "github:xuhancn/hermes-claude-connector",
+  "repository": "github:xuhancn/hermes-claude-bridge",
   "bin": {
     "hbridge": "dist/hbridge.mjs"
   },
