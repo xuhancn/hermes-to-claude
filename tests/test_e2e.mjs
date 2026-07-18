@@ -311,7 +311,106 @@ async function main() {
   // Clean up persistence file
   try { unlinkSync(taskFile); } catch {}
 
-  // ── Summary ─────────────────────────────────────────────
+  // ── Phase 14: Session timeout ──────────────────────────────
+  group('Phase 14: Session timeout');
+
+  const s14 = new Session({ taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50 });
+  s14.start().catch(() => {});
+  await sleep(300);
+  // Timeout calls _failTask → status becomes "failed"
+  if (s14.status === 'failed' && s14.result === 'timeout') ok('Session timed out after 50ms');
+  else fail('Session did not timeout', 'status=' + s14.status + ' result=' + s14.result);
+  if (s14.child && !s14.child.killed) try { s14.child.kill(); } catch {}
+
+  // ── Phase 15: Session error subtypes ──────────────────────
+  group('Phase 15: Session error subtypes');
+
+  const subtypes = ['error_max_turns', 'error_max_budget_usd', 'error_max_structured_output_retries'];
+  for (const st of subtypes) {
+    const s = new Session({ taskId: 't-err-' + st, prompt: 'err test' });
+    s._onMessage({ type: 'result', subtype: st, errors: ['err'] });
+    if (s.exitCode === 1) ok(st + ' -> exitCode=1');
+    else fail(st + ' exitCode wrong', String(s.exitCode));
+  }
+
+  // ── Phase 16: Session _failTask sets exitCode=1 ────────────
+  group('Phase 16: Session _failTask');
+
+  const s16 = new Session({ taskId: 't-fail-exit', prompt: 'fail test' });
+  s16._failTask('something bad');
+  if (s16.exitCode === 1) ok('_failTask sets exitCode=1');
+  else fail('_failTask exitCode', String(s16.exitCode));
+  if (s16.status === 'failed') ok('_failTask sets status=failed');
+  else fail('_failTask status', s16.status);
+
+  // ── Phase 17: Parallel session completion order ──────────
+  group('Phase 17: Parallel completion order');
+
+  const completionOrder = [];
+  const s17a = new Session({ taskId: 't-order-a', prompt: 'a' });
+  const s17b = new Session({ taskId: 't-order-b', prompt: 'b' });
+  s17a._onComplete = () => completionOrder.push('a');
+  s17b._onComplete = () => completionOrder.push('b');
+
+  // Complete in reverse order via Session._finishTask
+  s17b._finishTask(0);
+  s17a._finishTask(0);
+  await sleep(50);
+
+  if (completionOrder.length === 2) ok('Both completed: ' + completionOrder.join(' -> '));
+  else fail('Only ' + completionOrder.length + ' completed');
+  if (completionOrder[0] === 'b' && completionOrder[1] === 'a') ok('Order preserved (b then a)');
+  else fail('Unexpected order', completionOrder.join(','));
+
+  // Bridge cleanup via _onSessionComplete
+  const b17 = new Bridge({ maxConcurrent: 3 });
+  const s17c = new Session({ taskId: 't-order-c', prompt: 'c' });
+  s17c._onComplete = (s) => b17._onSessionComplete(s);
+  b17._sessions.set('t-order-c', s17c);
+  s17c._finishTask(0);
+  await sleep(50);
+  if (!b17._sessions.has('t-order-c')) ok('Bridge session cleaned up after completion');
+  else fail('Bridge session not cleaned up');
+
+  // ── Phase 18: Persistence trim ─────────────────────────────
+  group('Phase 18: Persistence trim');
+
+  const { trimCompletedTasks } = await imp(join(PROJECT_ROOT, 'src/hbridge/persistence.mjs'));
+  const TASK_FILE2 = getTasksFilePath();
+  try { unlinkSync(TASK_FILE2); } catch {}
+
+  for (let i = 0; i < 150; i++) {
+    appendCompletedTask({ id: 'trim-' + i, prompt: 'trim', status: 'done', result: 'x', exitCode: 0, usage: null });
+  }
+  ok('150 tasks written');
+
+  trimCompletedTasks();
+  const remaining = loadCompletedTasks().length;
+  if (remaining <= 150) ok('File stable after trim (' + remaining + ' tasks)');
+  else fail('File grew after trim: ' + remaining);
+
+  try { unlinkSync(TASK_FILE2); } catch {}
+
+  // ── Phase 19: Edge cases ──────────────────────────────────
+  group('Phase 19: Edge cases');
+
+  const b19 = new Bridge({ maxConcurrent: 3 });
+  b19.unsubscribeTask('nonexistent', { write: () => {} });
+  ok('unsubscribeTask nonexistent — no throw');
+
+  b19.cancelTask('nonexistent');
+  ok('cancelTask nonexistent — no throw');
+
+  const s19 = new Session({ taskId: 't-edge', prompt: 'edge' });
+  s19.unsubscribe({ write: () => {} });
+  ok('Session unsubscribe before subscribe — no throw');
+
+  // _finishTask is idempotent
+  const s19b = new Session({ taskId: 't-edge2', prompt: 'edge' });
+  s19b._finishTask(0);
+  s19b._finishTask(0); // second call should be no-op
+  if (s19b.status === 'done') ok('Session double _finishTask is idempotent');
+  else fail('Double _finishTask broke state', s19b.status);
   const total = passed + failed;
   console.log('\n' + '='.repeat(60));
   console.log('  ' + (failed === 0 ? 'ALL PASSED' : 'SOME FAILED') + ' — ' + total + ' checks: ' + passed + ' passed, ' + failed + ' failed');

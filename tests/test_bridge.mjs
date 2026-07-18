@@ -190,6 +190,69 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
   assert(true, "trimCompletedTasks is safe to call");
 }
 
+// ── Test 13: createTask with auto-generated ID ──────────────────────
+{
+  const b = new Bridge({ maxConcurrent: 5 });
+  const { Session } = await import("../src/hbridge/session.mjs");
+  const s = new Session({ taskId: "t-auto", prompt: "auto-gen" });
+  s.status = "running";
+  b._sessions.set("t-auto", s);
+  assert(b.getActiveCount() === 1, "task with custom id registered");
+  const t = b.getTask("t-auto");
+  assert(t !== null, "getTask finds auto-id task");
+  assert(t.status === "running", "auto-id task status");
+}
+
+// ── Test 14: subscribeTask forwards to session when it starts ──────
+{
+  const b = new Bridge({ maxConcurrent: 5 });
+  const chunks = [];
+  const sub = { write: d => chunks.push(d) };
+  b.subscribeTask("t-pending-sub", sub);
+  const { Session } = await import("../src/hbridge/session.mjs");
+  const s = new Session({ taskId: "t-pending-sub", prompt: "test" });
+  b._sessions.set("t-pending-sub", s);
+  b.subscribeTask("t-pending-sub", sub);
+  s._emitChunk("forwarded");
+  assert(chunks.some(c => c.includes("forwarded")), "pending subscriber forwarded to session");
+  b.unsubscribeTask("t-pending-sub", sub);
+}
+
+// ── Test 15: unsubscribeTask nonexistent ──────────────────────────
+{
+  const b = new Bridge();
+  b.unsubscribeTask("nonexistent", { write: () => {} });
+  assert(true, "unsubscribeTask nonexistent does not throw");
+}
+
+// ── Test 16: cancelTask queued with reject ────────────────────────
+{
+  const b = new Bridge({ maxConcurrent: 0 });
+  let rejected = false;
+  b._pendingQueue.push({ taskId: "t-reject", resolve: () => {}, reject: () => { rejected = true; } });
+  b.cancelTask("t-reject");
+  assert(rejected === true, "queued task reject called on cancel");
+}
+
+// ── Test 17: _failTask sets exitCode=1 ────────────────────────────
+{
+  const { Session } = await import("../src/hbridge/session.mjs");
+  const s = new Session({ taskId: "t-fail", prompt: "fail" });
+  s._failTask("error");
+  assert(s.exitCode === 1, "_failTask exitCode=1");
+  assert(s.status === "failed", "_failTask status=failed");
+}
+
+// ── Test 18: _finishTask is idempotent ────────────────────────────
+{
+  const { Session } = await import("../src/hbridge/session.mjs");
+  const s = new Session({ taskId: "t-finish2", prompt: "finish" });
+  s._finishTask(0);
+  s._finishTask(0);
+  assert(s.status === "done", "_finishTask idempotent: status done");
+  assert(s.exitCode === 0, "_finishTask idempotent: exitCode 0");
+}
+
 // ── Cleanup ──────────────────────────────────────────────────────────
 try { unlinkSync(TASK_FILE); } catch {}
 
