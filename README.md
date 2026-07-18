@@ -3,6 +3,7 @@
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
 ```
+<<<<<<< HEAD
 📱 User ----HTTP----> 🤖 Hermes-Agent ----hbridge----> 🏭 Claude Code (deploy role)
                             ├───hbridge───> 🔧 Claude Code (coding role)
                             ├───hbridge───> 🧪 Claude Code (testing role)
@@ -11,6 +12,15 @@
 
 
 
+=======
+📱 User ----HTTP----> 🤖 Hermes ----hbridge----> 🏭 Claude deploy
+                            ├───hbridge───> 🔧 Claude coding
+                            ├───hbridge───> 🧪 Claude testing
+                            └───hbridge───> 🔬 Claude building
+```
+
+
+>>>>>>> 4f4398b (update README banner to new multi-hbridge design)
 ## Quick Start
 
 **Hermes-Agent** dispatches tasks to **Claude Code** workers via hbridge:
