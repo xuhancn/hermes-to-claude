@@ -1,6 +1,6 @@
 # Hermes-Claude-Bridge (hbridge)
 
-Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — **no Pro/Max subscription required**.
+**Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
 ```
 📱 User ----HTTP----> 🤖 Hermes-Agent ----hbridge----> 🏭 Claude Code (deploy role)
@@ -13,35 +13,39 @@ Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — **no Pro/Ma
 
 ## Quick Start
 
+**Hermes-Agent** dispatches tasks to **Claude Code** workers via hbridge:
+
 ```bash
 # Install
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install && npm run build
 
-# Start server
+# Start server (port = hash of cwd)
 hbridge --enable
 
 # Health check
 curl http://127.0.0.1:9761/health
 # → {"status":"ok"}
 
-# Create a task
+# Deploy a task (Hermes-Agent → hbridge → Claude Code)
 curl -X POST http://127.0.0.1:9761/v1/task/create \
   -H "Content-Type: application/json" \
   -d '{"prompt":"say hello in one word"}'
 # → {"task_id":"task_xxx","status":"created"}
 
-# Get result (poll until success)
+# Get result (poll until done)
 curl http://127.0.0.1:9761/v1/task/output?task_id=task_xxx
 # → {"retrieval_status":"success","task":{"result":"Hello.","usage":{...}}}
 ```
+
+Multiple Claude Code instances can run concurrently — each in its own project directory, each on its own port. Hermes-Agent routes tasks to the right Claude based on the working directory.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `hbridge --enable` | Start server (port derived from cwd, key from `~/.hbridge_key`) |
+| `hbridge --enable` | Start server (port = MD5(cwd), key from `~/.hbridge_key`) |
 | `hbridge --disable` | Stop server |
 | `hbridge --status` | Show server status + last client connection |
 
