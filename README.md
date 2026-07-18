@@ -3,11 +3,12 @@
 Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — **no Pro/Max subscription required**.
 
 ```
-📱 User ----HTTP----> 🤖 Hermes ----hbridge----> 🏭 Claude deploy
-                            ├───hbridge───> 🔧 Claude coding
-                            ├───hbridge───> 🧪 Claude testing
-                            └───hbridge───> 🔬 Claude building
+📱 User ----HTTP----> 🤖 Hermes-Agent ----hbridge----> 🏭 Claude Code (deploy role)
+                            ├───hbridge───> 🔧 Claude Code (coding role)
+                            ├───hbridge───> 🧪 Claude Code (testing role)
+                            └───hbridge───> 🔬 Claude Code (building role)
 ```
+
 
 
 ## Quick Start
