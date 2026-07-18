@@ -86,6 +86,7 @@ export function createServer(expectedKey, bridgeInput) {
           const createOpts = {};
           if (payload.sessionId) createOpts.sessionId = payload.sessionId;
           if (payload.permission_mode) createOpts.permissionMode = payload.permission_mode;
+          if (payload.skip_permissions) createOpts.skipPermissions = true;
           result = { task_id: taskId, status: "created" };
           bridge.createTask(payload.prompt, taskId, createOpts).catch(err => {
             console.error(`[server] task ${taskId} error: ${err.message}`);

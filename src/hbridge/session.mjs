@@ -15,14 +15,6 @@ import { BoundedUUIDSet } from "./bridgeMessaging.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const CLAUDE_ARGS = [
-  "@anthropic-ai/claude-code",
-  "--print",
-  "--input-format", "stream-json",
-  "--output-format", "stream-json",
-  "--verbose",
-  // "--dangerously-skip-permissions",   // Hermes controls permissions via Pipeline
-];
 
 const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
 const DEFAULT_MAX_AUTO_RESPOND = 5;
@@ -52,6 +44,7 @@ export class Session {
     this._cwd = opts.cwd || undefined;
     this._taskTimeoutMs = opts.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
     this._maxAutoRespond = opts.maxAutoRespond ?? DEFAULT_MAX_AUTO_RESPOND;
+    this._skipPermissions = opts.skipPermissions === true; // Hermes opt-in per task
     this._permissionMode = opts.permissionMode ?? DEFAULT_PERMISSION_MODE;
     this._onComplete = opts.onComplete || null;
     this._onError = opts.onError || null;
@@ -108,10 +101,19 @@ export class Session {
 
     const cwd = this._cwd || process.cwd();
     const isWin = process.platform === "win32";
+    // Build CLI args — Hermes controls skip_permissions per task
+    const claudeArgs = [
+      "@anthropic-ai/claude-code",
+      "--print",
+      "--input-format", "stream-json",
+      "--output-format", "stream-json",
+      "--verbose",
+    ];
+    if (this._skipPermissions) claudeArgs.push("--dangerously-skip-permissions");
     const cmd = isWin ? "cmd.exe" : "npx";
     const args = isWin
-      ? ["/d", "/s", "/c", `npx.cmd ${CLAUDE_ARGS.join(" ")}`]
-      : CLAUDE_ARGS;
+      ? ["/d", "/s", "/c", `npx.cmd ${claudeArgs.join(" ")}`]
+      : claudeArgs;
 
     try {
       this.child = spawn(cmd, args, {

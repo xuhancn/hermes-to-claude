@@ -300,6 +300,7 @@ export class Bridge {
       cwd: opts?.cwd || this._cwd,
       taskTimeoutMs: this._taskTimeoutMs,
       permissionMode: opts?.permissionMode || this._permissionMode,
+      skipPermissions: opts?.skipPermissions === true,
       onComplete: (s) => this._onSessionComplete(s),
       onError: (s, reason) => this._onSessionError(s, reason),
     });
