@@ -21,12 +21,12 @@ export class Bridge {
   /**
    * @param {object} [opts]
    * @param {number} [opts.maxConcurrent] - Max parallel sessions (default 3)
-   * @param {number} [opts.taskTimeoutMs] - Per-task timeout (default 300000)
+   * @param {number} [opts.taskTimeoutMs] - Per-task timeout (0 = no timeout)
    * @param {string} [opts.cwd] - Default working directory
    */
   constructor(opts = {}) {
     this._maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
-    this._taskTimeoutMs = opts.taskTimeoutMs ?? 300_000;
+    this._taskTimeoutMs = opts.taskTimeoutMs ?? 0; // 0 = no timeout
     this._cwd = opts.cwd || undefined;
 
     /** @type {Map<string, import("./session.mjs").Session>} */
