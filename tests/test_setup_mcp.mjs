@@ -16,10 +16,10 @@ mkdirSync(MOCK);
 const r1 = spawnSync("node", ["scripts/setup-mcp.cjs"], {
   env: { ...process.env, HOME: MOCK }, cwd: process.cwd()
 });
-const configPath = join(MOCK, ".claude", "claude_desktop_config.json");
+const configPath = join(MOCK, ".claude.json");
 assert(existsSync(configPath), "config created");
 const c = JSON.parse(readFileSync(configPath, "utf8"));
-assert(c.mcpServers?.hbridge?.command === "hbridge", "hbridge entry");
+assert(c.mcpServers?.hbridge?.command?.endsWith("hbridge.mjs"), "hbridge entry");
 
 // 2. Existing config + other MCP → hbridge added, existing untouched
 c.mcpServers.existing = { command: "other" };
@@ -29,7 +29,7 @@ spawnSync("node", ["scripts/setup-mcp.cjs"], {
 });
 const c2 = JSON.parse(readFileSync(configPath, "utf8"));
 assert(c2.mcpServers.existing?.command === "other", "existing unchanged");
-assert(c2.mcpServers.hbridge?.command === "hbridge", "hbridge present");
+assert(c2.mcpServers.hbridge?.command?.endsWith("hbridge.mjs"), "hbridge present");
 
 rmSync(MOCK, { recursive: true, force: true });
 console.log(`${pass} passed, ${fail} failed`);
