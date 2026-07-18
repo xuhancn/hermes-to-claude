@@ -4,6 +4,8 @@
   "type": "module",
   "description": "Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required",
   "license": "MIT",
+  "author": "Xu Han <xu.han@outlook.com>",
+  "keywords": ["hermes", "claude-code", "bridge", "ai-agent"],
   "repository": "github:xuhancn/hermes-claude-bridge",
   "bin": {
     "hbridge": "dist/hbridge.mjs"
