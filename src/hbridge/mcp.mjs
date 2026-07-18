@@ -57,7 +57,7 @@ export function startMcpServer() {
       buf = buf.slice(i + 1);
       if (!line) continue;
       try {
-        handleMcp(JSON.parse(line), key, bridge);
+        handleMcp(JSON.parse(line), key);
       } catch (e) {
         respond({
           jsonrpc: "2.0",
@@ -177,7 +177,7 @@ function handleMcp(msg, key, bridge) {
 
 let inboxServer = null;
 
-function startInboxServer(expectedKey, bridge) {
+function startInboxServer(expectedKey, manager) {
   if (inboxServer && inboxServer.listening) return;
 
   const port = homePort(process.cwd());
@@ -218,7 +218,7 @@ function startInboxServer(expectedKey, bridge) {
           try {
             const prompt = JSON.parse(body).prompt || "";
             const taskId = `task_${randomUUID()}`;
-            bridge.createTask(prompt, taskId).catch(() => {});
+            manager.createTask(prompt, taskId).catch(() => {});
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ task_id: taskId, status: "created" }));
           } catch (e) {
@@ -233,7 +233,7 @@ function startInboxServer(expectedKey, bridge) {
         const taskId = new URL(`http://localhost${req.url}`).searchParams.get(
           "task_id"
         );
-        const result = bridge.getTaskOutput(taskId);
+        const result = manager.getTaskOutput(taskId);
         if (!result) {
           res.writeHead(404);
           res.end(JSON.stringify({ error: "not_found" }));
@@ -273,7 +273,7 @@ function startInboxServer(expectedKey, bridge) {
           process.stderr.write(`[hbridge] Killed PID ${pid}\n`);
         }
       } catch { /* fuser/ss unavailable */ }
-      setTimeout(() => startInboxServer(expectedKey, bridge), 300);
+      setTimeout(() => startInboxServer(expectedKey, manager), 300);
       return;
     }
     process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);

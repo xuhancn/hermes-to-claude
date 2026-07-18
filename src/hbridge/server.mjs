@@ -5,9 +5,9 @@ import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 
-export function createServer(expectedKey, bridgeInstance) {
+export function createServer(expectedKey, bridgeInput) {
   /** @type {Bridge} */
-  const bridge = bridgeInstance || new Bridge();
+  const bridge = bridgeInput || new Bridge();
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -83,8 +83,10 @@ export function createServer(expectedKey, bridgeInstance) {
           incrementTasks();
           // Fire-and-forget: return task_id immediately, run task in background
           const taskId = `task_${Date.now()}_${taskCount}`;
+          const createOpts = {};
+          if (payload.sessionId) createOpts.sessionId = payload.sessionId;
           result = { task_id: taskId, status: "created" };
-          bridge.createTask(payload.prompt, taskId).catch(err => {
+          bridge.createTask(payload.prompt, taskId, createOpts).catch(err => {
             console.error(`[server] task ${taskId} error: ${err.message}`);
           });
         } else if (endpoint === "task" && action === "cancel" && isPost) {
@@ -93,7 +95,9 @@ export function createServer(expectedKey, bridgeInstance) {
             status = 400;
             result = { error: "task_id required" };
           } else {
-            const ok = bridge.cancelTask(taskId);
+            const cancelOpts = {};
+            if (payload.sessionId) cancelOpts.sessionId = payload.sessionId;
+            const ok = bridge.cancelTask(taskId, cancelOpts);
             result = ok ? { status: "cancelled", task_id: taskId } : { error: "not_found" };
           }
         } else if (endpoint === "task" && action === "output") {
