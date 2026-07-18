@@ -4,9 +4,9 @@
 
 ```
 📱 User ----HTTP----> 🤖 Hermes-Agent ----h2c----> 🏭 Claude Code (deploy role)
-                            ├───h2c───> 🔧 Claude Code (coding role)
-                            ├───h2c───> 🧪 Claude Code (testing role)
-                            └───h2c───> 🔬 Claude Code (building role)
+                            ├----h2c----> 🔧 Claude Code (coding role)
+                            ├----h2c----> 🧪 Claude Code (testing role)
+                            └----h2c----> 🔬 Claude Code (building role)
 ```
 
 ---
