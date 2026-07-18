@@ -1,4 +1,3 @@
-import { execSync } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -43,7 +42,14 @@ export function startMcpServer() {
 
   // Home Mode — auto-start HTTP server (no enable needed)
   if (process.env.HBRIDGE_HOME === "1") {
-    ensureHttpServer(key, mcpBridge);
+    const port = homePort(process.cwd());
+    httpServer = createServer(key, mcpBridge);
+    httpServer.on("error", (err) => {
+      process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
+      httpServer = null;
+    });
+    httpServer.listen(port);
+    markRunning(port);
   }
 
   let buf = "";
@@ -94,13 +100,20 @@ function handleMcp(msg, key) {
     if (name === "hbridge_enable") {
       const port = homePort(process.cwd());
       const k = homeKey(process.cwd());
-      ensureHttpServer(k, mcpBridge);
+      if (!httpServer) {
+        httpServer = createServer(k, mcpBridge);
+        httpServer.on("error", (err) => {
+          process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
+          httpServer = null;
+        });
+        httpServer.listen(port);
+      }
       markRunning(port);
       t = k;
     } else if (name === "hbridge_disable") {
-      if (inboxServer) {
-        const srv = inboxServer;
-        inboxServer = null;
+      if (httpServer) {
+        const srv = httpServer;
+        httpServer = null;
         srv.close((err) => {
           if (err) process.stderr.write(`[hbridge] close error: ${err.message}\n`);
         });
@@ -174,42 +187,8 @@ function handleMcp(msg, key) {
 
 // ─── Shared HTTP server ────────────────────────────────────────────────
 
-let inboxServer = null;
 let mcpBridge = null;
-
-function ensureHttpServer(expectedKey, br) {
-  if (inboxServer && inboxServer.listening) return;
-  const port = homePort(process.cwd());
-  process.stderr.write(`[hbridge] HTTP server starting on :${port}\n`);
-  const srv = createServer(expectedKey, br);
-  srv.on("listening", () => {
-    markRunning(port);
-    process.stderr.write(`[hbridge] HTTP server listening on :${port}\n`);
-  });
-  srv.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      inboxServer = null;
-      process.stderr.write(`[hbridge] Port ${port} in use — killing old process\n`);
-      try {
-        const pid = execSync(
-          `fuser ${port}/tcp 2>/dev/null || ss -tlnp 2>/dev/null | grep ":${port}" | grep -oP "pid=\\K\\d+"`,
-          { encoding: "utf8", timeout: 3000 }
-        ).trim().split("\n").pop() || "";
-        if (pid) {
-          execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 2000 });
-          process.stderr.write(`[hbridge] Killed PID ${pid}\n`);
-        }
-      } catch { /* fuser/ss unavailable */ }
-      setTimeout(() => ensureHttpServer(expectedKey, br), 300);
-      return;
-    }
-    process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
-    markStopped();
-    inboxServer = null;
-  });
-  srv.listen(port);
-  inboxServer = srv;
-}
+let httpServer = null;
 
 // ─── MCP tools ────────────────────────────────────────────────────────
 
