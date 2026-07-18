@@ -1,5 +1,5 @@
 {
-  "name": "hermes-claude-bridge",
+  "name": "hermes-claude-connector",
   "version": "0.1.0",
   "type": "module",
   "description": "Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required",

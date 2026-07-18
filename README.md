@@ -36,7 +36,7 @@ hbridge requires **Node.js ≥ 20**. Install it for your platform:
 ### Install
 
 ```bash
-git clone https://github.com/xuhancn/hermes-claude-bridge.git
+git clone https://github.com/xuhancn/hermes-claude-connector.git
 cd hermes-claude-bridge
 npm install && npm run build
 ```
