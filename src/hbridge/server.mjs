@@ -1,13 +1,15 @@
 import { createServer as http } from "http";
-import { Bridge } from "./bridge.mjs";
+import { Bridge, BridgeManager } from "./bridge.mjs";
 import { incrementTasks, writeState } from "./state.mjs";
 import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 
-export function createServer(expectedKey, bridgeInstance) {
-  /** @type {Bridge} */
-  const bridge = bridgeInstance || new Bridge();
+export function createServer(expectedKey, bridgeInput) {
+  // Accept Bridge, BridgeManager, or undefined
+  const manager = bridgeInput instanceof BridgeManager
+    ? bridgeInput
+    : new BridgeManager(bridgeInput instanceof Bridge ? bridgeInput : undefined);
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -71,10 +73,10 @@ export function createServer(expectedKey, bridgeInstance) {
               },
             };
             const cleanup = () => {
-              try { bridge.unsubscribeTask(taskId, subscriber); } catch {}
+              try { manager.unsubscribeTask(taskId, subscriber); } catch {}
               try { res.end(); } catch {}
             };
-            bridge.subscribeTask(taskId, subscriber);
+            manager.subscribeTask(taskId, subscriber);
             req.on("close", cleanup);
             return; // handled — no response outside handle()
           }
@@ -83,8 +85,10 @@ export function createServer(expectedKey, bridgeInstance) {
           incrementTasks();
           // Fire-and-forget: return task_id immediately, run task in background
           const taskId = `task_${Date.now()}_${taskCount}`;
+          const createOpts = {};
+          if (payload.sessionId) createOpts.sessionId = payload.sessionId;
           result = { task_id: taskId, status: "created" };
-          bridge.createTask(payload.prompt, taskId).catch(err => {
+          manager.createTask(payload.prompt, taskId, createOpts).catch(err => {
             console.error(`[server] task ${taskId} error: ${err.message}`);
           });
         } else if (endpoint === "task" && action === "cancel" && isPost) {
@@ -93,15 +97,17 @@ export function createServer(expectedKey, bridgeInstance) {
             status = 400;
             result = { error: "task_id required" };
           } else {
-            const ok = bridge.cancelTask(taskId);
+            const cancelOpts = {};
+            if (payload.sessionId) cancelOpts.sessionId = payload.sessionId;
+            const ok = manager.cancelTask(taskId, cancelOpts);
             result = ok ? { status: "cancelled", task_id: taskId } : { error: "not_found" };
           }
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
-          result = bridge.getTaskOutput(taskId) || { error: "not_found" };
+          result = manager.getTaskOutput(taskId) || { error: "not_found" };
         } else if (endpoint === "task") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
-          result = bridge.getTask(taskId) || { error: "not_found" };
+          result = manager.getTask(taskId) || { error: "not_found" };
         } else {
           status = 404;
           result = { error: "not_found" };

@@ -15,6 +15,7 @@ import { randomUUID } from "crypto";
 import { writeState } from "./state.mjs";
 import { StdioTransport } from "./transport/StdioTransport.mjs";
 import { BoundedUUIDSet } from "./bridgeMessaging.mjs";
+import { appendCompletedTask, loadCompletedTasks } from "./persistence.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -405,6 +406,7 @@ export class Bridge {
     this.currentTask.status = "done";
     this.currentTask.exitCode = exitCode;
     this._results.set(taskId, { ...this.currentTask });
+    appendCompletedTask(this.currentTask);
     this.busy = false;
     writeState({
       latestTask: {
@@ -430,6 +432,7 @@ export class Bridge {
     this.currentTask.status = "failed";
     this.currentTask.result = reason;
     this._results.set(taskId, { ...this.currentTask });
+    appendCompletedTask(this.currentTask);
     this.busy = false;
     writeState({
       latestTask: {
@@ -823,5 +826,234 @@ export class Bridge {
       clearTimeout(this._livenessTimer);
       this._livenessTimer = null;
     }
+  }
+}
+
+/**
+ * BridgeManager — manages multiple Bridge instances keyed by sessionId
+ * for parallel Claude processes.
+ *
+ * - Each sessionId maps to an independent Bridge (own child process).
+ * - createTask accepts optional `sessionId` for routing.
+ * - getTask / getTaskOutput search all sessions + persisted tasks from disk.
+ * - subscribeTask wires to all current and future sessions.
+ */
+export class BridgeManager {
+  /**
+   * @param {Bridge} [defaultBridge] - Optional bridge for default session
+   */
+  constructor(defaultBridge) {
+    /** @type {Map<string, Bridge>} */
+    this._sessions = new Map();
+    this._defaultSessionId = 'default';
+
+    // Create default session bridge
+    this._sessions.set(this._defaultSessionId, defaultBridge || new Bridge());
+
+    // Pending SSE subscribers for tasks that may start on future sessions
+    /** @type {Map<string, Set<{write: (data:string) => void}>>|null} */
+    this._pendingTaskSubs = null;
+  }
+
+  /**
+   * Load persisted tasks from disk. Always reads fresh to pick up
+   * tasks written by any Bridge instance since the last check.
+   * @returns {Map<string, object>}
+   */
+  _getPersistedTasks() {
+    const map = new Map();
+    try {
+      const tasks = loadCompletedTasks();
+      for (const t of tasks) {
+        map.set(t.id, t);
+      }
+    } catch { /* ignore */ }
+    return map;
+  }
+
+  /**
+   * Get or create a Bridge instance for the given session.
+   * @param {string} sessionId
+   * @returns {Bridge}
+   */
+  _getOrCreateSession(sessionId) {
+    if (!this._sessions.has(sessionId)) {
+      const bridge = new Bridge();
+      bridge._sessionId = sessionId;
+      this._sessions.set(sessionId, bridge);
+      // Wire any pending subscribers to the new session
+      this._wirePendingSubscribers(bridge);
+    }
+    return this._sessions.get(sessionId);
+  }
+
+  /**
+   * Wire any pending task subscribers to a newly created bridge session.
+   * @param {Bridge} bridge
+   */
+  _wirePendingSubscribers(bridge) {
+    if (!this._pendingTaskSubs) return;
+    for (const [taskId, subs] of this._pendingTaskSubs) {
+      for (const sub of subs) {
+        bridge.subscribeTask(taskId, sub);
+      }
+    }
+  }
+
+  /**
+   * Create a new task, optionally in a specific session.
+   * @param {string} prompt
+   * @param {string} [taskId]
+   * @param {{ sessionId?: string, cwd?: string }} [opts]
+   * @returns {Promise<{task_id: string, status: string}>}
+   */
+  async createTask(prompt, taskId, opts = {}) {
+    const sessionId = (opts && opts.sessionId) || this._defaultSessionId;
+    const bridge = this._getOrCreateSession(sessionId);
+    return bridge.createTask(prompt, taskId, opts);
+  }
+
+  /**
+   * Cancel a task in a specific session or across all sessions.
+   * @param {string} taskId
+   * @param {{ sessionId?: string }} [opts]
+   * @returns {boolean}
+   */
+  cancelTask(taskId, opts = {}) {
+    const sessionId = opts && opts.sessionId;
+    if (sessionId) {
+      const bridge = this._sessions.get(sessionId);
+      return bridge ? bridge.cancelTask(taskId) : false;
+    }
+    // Search all sessions
+    for (const bridge of this._sessions.values()) {
+      if (bridge.cancelTask(taskId)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get task info from active sessions or persisted tasks.
+   * @param {string} taskId
+   * @param {{ sessionId?: string }} [opts]
+   * @returns {object|null}
+   */
+  getTask(taskId, opts = {}) {
+    const sessionId = opts && opts.sessionId;
+    if (sessionId) {
+      const bridge = this._sessions.get(sessionId);
+      if (bridge) {
+        const t = bridge.getTask(taskId);
+        if (t) return t;
+      }
+    } else {
+      // Search all sessions
+      for (const bridge of this._sessions.values()) {
+        const t = bridge.getTask(taskId);
+        if (t) return t;
+      }
+    }
+    // Check persisted tasks
+    const persisted = this._getPersistedTasks().get(taskId);
+    if (persisted) {
+      return {
+        id: persisted.id,
+        status: persisted.status,
+        created: persisted.completedAt || 0,
+        usage: persisted.usage ?? null,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Get task output from active sessions or persisted tasks.
+   * @param {string} taskId
+   * @param {{ sessionId?: string }} [opts]
+   * @returns {object|null}
+   */
+  getTaskOutput(taskId, opts = {}) {
+    const sessionId = opts && opts.sessionId;
+    if (sessionId) {
+      const bridge = this._sessions.get(sessionId);
+      if (bridge) {
+        const o = bridge.getTaskOutput(taskId);
+        if (o) return o;
+      }
+    } else {
+      // Search all sessions
+      for (const bridge of this._sessions.values()) {
+        const o = bridge.getTaskOutput(taskId);
+        if (o) return o;
+      }
+    }
+    // Check persisted tasks
+    const persisted = this._getPersistedTasks().get(taskId);
+    if (persisted) {
+      return {
+        retrieval_status: "success",
+        task: {
+          id: persisted.id,
+          status: persisted.status,
+          result: persisted.result || "",
+          exitCode: persisted.exitCode ?? null,
+          usage: persisted.usage ?? null,
+        },
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Subscribe to streaming output for a task.
+   * Subscribes on all active bridges; tracks for future sessions.
+   * @param {string} taskId
+   * @param {{ write: (data: string) => void }} subscriber
+   */
+  subscribeTask(taskId, subscriber) {
+    // Subscribe on all existing sessions
+    for (const bridge of this._sessions.values()) {
+      bridge.subscribeTask(taskId, subscriber);
+    }
+    // Track for future sessions
+    if (!this._pendingTaskSubs) this._pendingTaskSubs = new Map();
+    if (!this._pendingTaskSubs.has(taskId)) {
+      this._pendingTaskSubs.set(taskId, new Set());
+    }
+    this._pendingTaskSubs.get(taskId).add(subscriber);
+  }
+
+  /**
+   * Unsubscribe from streaming output for a task.
+   * @param {string} taskId
+   * @param {{ write: (data: string) => void }} subscriber
+   */
+  unsubscribeTask(taskId, subscriber) {
+    for (const bridge of this._sessions.values()) {
+      bridge.unsubscribeTask(taskId, subscriber);
+    }
+    // Also remove from pending
+    if (this._pendingTaskSubs && this._pendingTaskSubs.has(taskId)) {
+      this._pendingTaskSubs.get(taskId).delete(subscriber);
+    }
+  }
+
+  /**
+   * Get list of active session IDs.
+   * @returns {string[]}
+   */
+  getSessions() {
+    return Array.from(this._sessions.keys());
+  }
+
+  /**
+   * Clean up all bridges (kill child processes, clear sessions).
+   */
+  cleanup() {
+    for (const bridge of this._sessions.values()) {
+      bridge._cleanupProcess();
+    }
+    this._sessions.clear();
+    this._pendingTaskSubs = null;
   }
 }
