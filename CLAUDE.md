@@ -1,4 +1,4 @@
-# CLAUDE.md — hermes-claude-bridge
+# CLAUDE.md — hermes-claude-connector
 
 ## 铁律 — 增量修改 only
 - 每个 PR 必须有详细 Description: 改了什么、为什么、怎么验证

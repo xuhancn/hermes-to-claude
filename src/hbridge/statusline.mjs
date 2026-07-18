@@ -16,7 +16,7 @@
  *
  * Output examples:
  *   ⏹️ hbridge: off
- *   ▶️ hbridge: on | :9761 | hermes-claude-bridge
+ *   ▶️ hbridge: on | :9761 | hermes-claude-connector
  */
 
 import { createHash } from "crypto";
