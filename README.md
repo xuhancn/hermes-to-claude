@@ -3,8 +3,12 @@
 Local HTTP bridge connecting **Hermes Agent** to **Claude Code** — **no Pro/Max subscription required**.
 
 ```
-Hermes ──HTTP──▶ hbridge:<port> ──spawn──▶ Claude Code (per-task session)
+📱 User ----HTTP----> 🤖 Hermes ----hbridge----> 🏭 Claude deploy
+                            ├───hbridge───> 🔧 Claude coding
+                            ├───hbridge───> 🧪 Claude testing
+                            └───hbridge───> 🔬 Claude building
 ```
+
 
 ## Quick Start
 
