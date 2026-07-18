@@ -366,6 +366,32 @@ export class Bridge {
 
     // ── Completion signals ─────────────────────────────────────────
     if (msg.stop_reason || msg.type === "result") {
+      // Extract usage/cost from result messages:
+      //   { type: "result", total_cost_usd: 0.01,
+      //     usage: { input_tokens: 150, output_tokens: 300,
+      //              cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } }
+      // The same fields may also appear on assistant messages with stop_reason.
+      if (this.currentTask) {
+        const totalCostUsd = /** @type {number|undefined} */ (msg.total_cost_usd);
+        const usage = /** @type {Record<string,number>|undefined} */ (msg.usage);
+        if (totalCostUsd !== undefined || usage !== undefined) {
+          this.currentTask.usage = {
+            total_cost_usd: totalCostUsd ?? 0,
+            input_tokens: usage?.input_tokens ?? 0,
+            output_tokens: usage?.output_tokens ?? 0,
+            cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
+            cache_read_input_tokens: usage?.cache_read_input_tokens ?? 0,
+          };
+          process.stderr.write(
+            `[bridge] usage: $${this.currentTask.usage.total_cost_usd} ` +
+            `(in=${this.currentTask.usage.input_tokens} ` +
+            `out=${this.currentTask.usage.output_tokens} ` +
+            `cache_creation=${this.currentTask.usage.cache_creation_input_tokens} ` +
+            `cache_read=${this.currentTask.usage.cache_read_input_tokens})\n`,
+          );
+        }
+      }
+
       // Official error subtypes: error_during_execution, error_max_turns,
       // error_max_budget_usd, error_max_structured_output_retries
       const isError = typeof msg.subtype === "string" && msg.subtype.startsWith("error_");
@@ -479,6 +505,7 @@ export class Bridge {
       status: "running",
       result: "",
       exitCode: null,
+      usage: null,
     };
     this.busy = true;
     // Reset per-task streaming state
@@ -553,7 +580,7 @@ export class Bridge {
     const t = this._results.get(taskId) ||
       (this.currentTask?.id === taskId ? this.currentTask : null);
     if (!t) return null;
-    return { id: t.id, status: t.status, created: 0 };
+    return { id: t.id, status: t.status, created: 0, usage: t.usage ?? null };
   }
 
   getTaskOutput(taskId) {
@@ -568,6 +595,7 @@ export class Bridge {
         status: t.status,
         result: t.result || "",
         exitCode: t.exitCode ?? null,
+        usage: t.usage ?? null,
       },
     };
   }

@@ -292,7 +292,95 @@ async function main() {
   if (guardText.includes('origStdoutWrite')) ok('NDJSON stdout guard is active');
   else fail('NDJSON guard not found in startMcpServer');
 
-  // ── Summary ─────────────────────────────────────────────
+  // ── Phase 10: Result data extraction (cost/token/usage) ───
+  group('Phase 10: Result data extraction (cost/token/usage)');
+
+  const b10 = new Bridge();
+  await patchBridge(b10);
+  b10.createTask('usage test', 't-usage').catch(() => {});
+  await sleep(100);
+
+  // Simulate a result message with usage data
+  b10._onMessage({
+    type: 'result',
+    subtype: 'success',
+    total_cost_usd: 0.01234,
+    usage: {
+      input_tokens: 150,
+      output_tokens: 300,
+      cache_creation_input_tokens: 10,
+      cache_read_input_tokens: 20,
+    },
+  });
+  await sleep(200);
+
+  const o10 = b10.getTaskOutput('t-usage');
+  if (o10 && o10.task.status === 'done') ok('Result task done');
+  else fail('Result task not done', JSON.stringify(o10));
+
+  if (o10?.task.usage) {
+    const u = o10.task.usage;
+    if (u.total_cost_usd === 0.01234) ok('total_cost_usd: ' + u.total_cost_usd);
+    else fail('total_cost_usd wrong', JSON.stringify(u));
+    if (u.input_tokens === 150) ok('input_tokens: ' + u.input_tokens);
+    else fail('input_tokens wrong', JSON.stringify(u));
+    if (u.output_tokens === 300) ok('output_tokens: ' + u.output_tokens);
+    else fail('output_tokens wrong', JSON.stringify(u));
+    if (u.cache_creation_input_tokens === 10) ok('cache_creation_input_tokens: ' + u.cache_creation_input_tokens);
+    else fail('cache_creation_input_tokens wrong', JSON.stringify(u));
+    if (u.cache_read_input_tokens === 20) ok('cache_read_input_tokens: ' + u.cache_read_input_tokens);
+    else fail('cache_read_input_tokens wrong', JSON.stringify(u));
+  } else {
+    fail('No usage data in task output', JSON.stringify(o10));
+  }
+
+  b10._cleanupProcess();
+
+  // ── Phase 11: Result data on assistant message with stop_reason ──
+  group('Phase 11: Result data on assistant message with stop_reason');
+
+  const b11 = new Bridge();
+  await patchBridge(b11);
+  b11.createTask('usage on assistant', 't-usage-asst').catch(() => {});
+  await sleep(100);
+
+  // Usage data can also appear on assistant messages with stop_reason
+  b11._onMessage({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'done' }] },
+    stop_reason: 'end_turn',
+    total_cost_usd: 0.005,
+    usage: { input_tokens: 80, output_tokens: 120 },
+  });
+  await sleep(200);
+
+  const o11 = b11.getTaskOutput('t-usage-asst');
+  if (o11?.task.usage?.total_cost_usd === 0.005) ok('Usage from assistant stop_reason: $' + o11.task.usage.total_cost_usd);
+  else fail('Usage from assistant missing', JSON.stringify(o11?.task?.usage));
+
+  b11._cleanupProcess();
+
+  // ── Phase 12: getTask returns usage ──────────────────────
+  group('Phase 12: getTask returns usage');
+
+  const b12 = new Bridge();
+  await patchBridge(b12);
+  b12.createTask('getTask usage', 't-get-usage').catch(() => {});
+  await sleep(100);
+
+  b12._onMessage({
+    type: 'result',
+    subtype: 'success',
+    total_cost_usd: 0.001,
+    usage: { input_tokens: 10, output_tokens: 20 },
+  });
+  await sleep(200);
+
+  const t12 = b12.getTask('t-get-usage');
+  if (t12?.usage?.total_cost_usd === 0.001) ok('getTask returns usage: $' + t12.usage.total_cost_usd);
+  else fail('getTask usage wrong', JSON.stringify(t12));
+
+  b12._cleanupProcess();
   const total = passed + failed;
   console.log('\n' + '='.repeat(60));
   console.log('  ' + (failed === 0 ? 'ALL PASSED' : 'SOME FAILED') + ' — ' + total + ' checks: ' + passed + ' passed, ' + failed + ' failed');
