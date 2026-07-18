@@ -83,7 +83,7 @@ Hermes-Agent discovers and controls hbridge via HTTP. Here is the complete API.
 
 ### Security
 
-Like CI tools, hbridge requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads.
+Like Claude Code CLI, hbridge requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads.
 
 ### Create a Task
 
