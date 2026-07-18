@@ -17,7 +17,7 @@ Hermes ──HTTP──▶ hbridge:<port> ──spawn──▶ Claude Code (per-
 ## Advanced of hbridge
 
 - **Security**: Hermes never touches your filesystem — all file ops go through Claude Code's permission system. No blind access.
-- **Auth**: Random key `hb_` + 8 base52 chars — generated once, stored in `~/.hbridge_key`. Same key for all directories on one machine.
+- **Auth**: Random key `hb_` + 8 base52 chars — generated once, stored in `~/.hbridge_key`. One key per machine, not per directory. Same key works across all projects on the same machine.
 - **Local-only**: Fully offline. No cloud, no external API, no Anthropic subscription.
 - **Default-off**: Zero ports open until explicit `--enable`. No attack surface when disabled.
 - **Cross-platform**: Windows (cmd.exe), Linux, macOS — single codebase, tested on all three.
@@ -41,6 +41,27 @@ Each task gets its own `Session` (one Claude Code child process), managed by a s
 - [MCP spec mapping](docs/mcp-spec.md) — MCP lifecycle, tool definitions, response formats
 - [Home local mode](docs/local-mode.md) — zero-config auto-start mode
 - [Module design](DESIGN.md) — key format, session pool, persistence
+
+### Design Rationale: Key vs Port
+
+**Key is machine-global**, **port is per-directory**. This follows Claude Code's working-directory-centric model.
+
+Claude Code reads its context — `CLAUDE.md`, project skills, `.claude/settings.json` — from the **current working directory**. Each project has its own conventions, its own skills, its own CLAUDE.md. To serve the right context, hbridge must spawn Claude Code in the right directory.
+
+```
+/project-a/CLAUDE.md  →  hbridge :9200  →  Claude Code (cwd=/project-a)
+/project-b/CLAUDE.md  →  hbridge :9201  →  Claude Code (cwd=/project-b)
+```
+
+**Port per directory** (`9200 + MD5(cwd) % 600`) means:
+- Each project gets a stable, predictable port
+- You can run hbridge for multiple projects on the same machine without conflict
+- The port is deterministic — Hermes computes it from the directory path without asking the server
+
+**Key per machine** means:
+- Hermes only needs one credential per machine, not one per project
+- The key is random, generated once, persisted in `~/.hbridge_key`
+- Same auth works across all directories on the same host
 
 ## 2. How to Build from Source
 
@@ -77,7 +98,7 @@ npm install -g .               # optional: global hbridge command
 
 When `HBRIDGE_HOME=1`, the server auto-starts — no subcommand needed.
 
-Port is derived deterministically from cwd. Key is random, generated once and persisted in `~/.hbridge_key` (machine-global — same key for all directories).
+Port is derived deterministically from cwd (one port per project). Key is random, generated once and persisted in `~/.hbridge_key` (one key per machine, works for all directories).
 All endpoints except `/health` require the key via **HTTP Basic Auth** (`user:hb_xxxx` base64-encoded).
 
 ### Cross-Platform
