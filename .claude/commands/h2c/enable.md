@@ -12,7 +12,7 @@ Start the h2c server. The access key is derived deterministically from the worki
 
 ## MCP tool
 
-Runs `node dist/hbridge.mjs --enable`. Key is auto-derived from cwd.
+Runs `node dist/hbridge.mjs enable`. Key is auto-derived from cwd.
 
 ## Examples
 
