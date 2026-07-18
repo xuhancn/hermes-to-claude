@@ -3,69 +3,172 @@
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
 ```
-<<<<<<< HEAD
 📱 User ----HTTP----> 🤖 Hermes-Agent ----hbridge----> 🏭 Claude Code (deploy role)
                             ├───hbridge───> 🔧 Claude Code (coding role)
                             ├───hbridge───> 🧪 Claude Code (testing role)
                             └───hbridge───> 🔬 Claude Code (building role)
 ```
 
+---
 
+## 1. hbridge Advantages
 
-=======
-📱 User ----HTTP----> 🤖 Hermes ----hbridge----> 🏭 Claude deploy
-                            ├───hbridge───> 🔧 Claude coding
-                            ├───hbridge───> 🧪 Claude testing
-                            └───hbridge───> 🔬 Claude building
-```
+- **No Pro/Max required** — works with any Claude Code via stdio; no Anthropic subscription needed.
+- **One agent, many Claudes** — one Hermes-Agent routes tasks to multiple Claude Code instances, each in its own project directory with its own CLAUDE.md and skills.
+- **Default-off, secure** — zero ports open until you explicitly `enable`. Auth key protects all endpoints.
+- **Cross-platform** — Windows / Linux / macOS. Single codebase.
+- **Local-only** — no cloud, no external API. Fully offline.
 
+---
 
->>>>>>> 4f4398b (update README banner to new multi-hbridge design)
-## Quick Start
+## 2. For Human Users
 
-**Hermes-Agent** dispatches tasks to **Claude Code** workers via hbridge:
+### Prepare
+
+hbridge requires **Node.js ≥ 20**. Install it for your platform:
+
+| Platform | Command |
+|----------|---------|
+| Linux (Ubuntu/Debian) | `sudo apt install nodejs npm` |
+| macOS | `brew install node` |
+| Windows | `winget install OpenJS.NodeJS` or download from https://nodejs.org |
+
+### Install
 
 ```bash
-# Install
 git clone https://github.com/xuhancn/hermes-claude-bridge.git
 cd hermes-claude-bridge
 npm install && npm run build
-
-# Start server (port = hash of cwd)
-hbridge --enable
-
-# Health check
-curl http://127.0.0.1:9761/health
-# → {"status":"ok"}
-
-# Deploy a task (Hermes-Agent → hbridge → Claude Code)
-curl -X POST http://127.0.0.1:9761/v1/task/create \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"say hello in one word"}'
-# → {"task_id":"task_xxx","status":"created"}
-
-# Get result (poll until done)
-curl http://127.0.0.1:9761/v1/task/output?task_id=task_xxx
-# → {"retrieval_status":"success","task":{"result":"Hello.","usage":{...}}}
 ```
 
-Multiple Claude Code instances can run concurrently — each in its own project directory, each on its own port. Hermes-Agent routes tasks to the right Claude based on the working directory.
+### Start in Claude Code
 
-## Commands
+After installation, enable hbridge from inside Claude Code:
 
-| Command | Description |
-|---------|-------------|
-| `hbridge --enable` | Start server (port = MD5(cwd), key from `~/.hbridge_key`) |
-| `hbridge --disable` | Stop server |
-| `hbridge --status` | Show server status + last client connection |
+```
+/hbridge enable
+```
 
-When `HBRIDGE_HOME=1`, the server auto-starts — no subcommand needed.
+This starts the HTTP server. The port is derived from the working directory (see Authentication and Port below). Check status at any time:
 
-All endpoints except `/health` require the key via HTTP Basic Auth.
+```
+/hbridge status
+```
 
-Created by **Xu Han** — [github.com/xuhancn](https://github.com/xuhancn)
+### Home Mode — For Headless Machines
 
-## Document References
+When Hermes-Agent runs on a server with no display, no manual command is needed. Export the **environment variable** before starting hbridge:
+
+```bash
+export HBRIDGE_HOME=1       # environment variable — auto-starts hbridge
+```
+
+With Home mode active, the server listens on `127.0.0.1` only. Authentication is **disabled** — safe because only local processes can reach it. Hermes-Agent connects without managing keys.
+
+### Authentication and Port
+
+The port is **deterministic**: `MD5(cwd)` → first 2 bytes → `9200 + (value % 600)`. Each project directory gets its own port. This is intentional:
+
+- Each Claude Code instance runs in its own working directory
+- Claude reads its own CLAUDE.md, skills, and project files from that directory
+- Port = project — you always know which Claude you're talking to
+
+The auth key (`hb_` + 8 random base52 characters) is written to `~/.hbridge_key` once and reused across all directories on the same machine. All HTTP endpoints (except `/health`) require HTTP Basic Auth with username `bridge` and the key as password.
+
+---
+
+## 3. For Hermes-Agent
+
+Hermes-Agent discovers and controls hbridge via HTTP. Here is the complete API.
+
+### Security
+
+Like CI tools, hbridge requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads.
+
+### Create a Task
+
+Spawn a Claude Code session:
+
+```bash
+curl -X POST http://<host>:<port>/v1/task/create \
+  -H "Authorization: Basic <base64(bridge:key)>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "fix the off-by-one bug in main.c"}'
+# → {"task_id":"task_xxx","status":"created"}
+```
+
+To skip permission prompts for development workloads:
+
+```bash
+curl -X POST http://<host>:<port>/v1/task/create \
+  -H "Authorization: Basic <base64(bridge:key)>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "...", "skip_permissions": true}'
+```
+
+| Optional field | Type | Description |
+|---------------|------|-------------|
+| `permission_mode` | `"approve"` (default) or `"bypass"` | Tool approval behavior |
+| `skip_permissions` | `boolean` | Skip all permission prompts |
+| `cwd` | string | Working directory for the Claude session |
+| `sessionId` | string | Reuse an existing Claude session |
+
+### Health Check
+
+Verify the server is reachable — no authentication required:
+
+```bash
+curl http://<host>:<port>/health
+# → {"status":"ok"}
+```
+
+Check health after creating a task to confirm the bridge is running and ready.
+
+### Get Task Output
+
+Poll until `status` is `"done"` or `"failed"`. Long-running tasks (code generation, test suites) may take minutes.
+
+```bash
+curl "http://<host>:<port>/v1/task/output?task_id=task_xxx" \
+  -H "Authorization: Basic <base64(bridge:key)>"
+# → {"retrieval_status":"success","task":{"status":"done","result":"Fixed.","exitCode":0}}
+```
+
+### Cancel a Task
+
+```bash
+curl -X POST http://<host>:<port>/v1/task/cancel \
+  -H "Authorization: Basic <base64(bridge:key)>" \
+  -H "Content-Type: application/json" \
+  -d '{"task_id":"task_xxx"}'
+```
+
+### Permission Pipeline
+
+hbridge includes a full permission pipeline — just like CI tools. Hermes-Agent can decide per-task how to handle tool approvals:
+
+| Mode | Behavior |
+|------|----------|
+| `approve` (default) | Claude sends `control_request` → Hermes decides allow/deny |
+| `bypass` | Claude sends request but doesn't block; Hermes can log for audit |
+| `skip_permissions` | `--dangerously-skip-permissions` — no requests, maximum speed |
+
+For quick development tasks, use `skip_permissions`. For production workloads that need an audit trail, keep the default `approve` mode. Hermes-Agent can also respond with `updatedInput` to modify tool parameters before Claude executes them.
+
+### Architecture
+
+```
+Hermes ──HTTP──▶ hbridge :<port> ──spawn──▶ Session (Claude Code)
+                      │                              │
+                      │  server.mjs (HTTP routing)    │  reads CLAUDE.md
+                      │  bridge.mjs (session pool)    │  loads skills
+                      │  session.mjs (per-task proc)  │  edits files
+```
+
+Hermes-Agent dispatches tasks; hbridge manages session lifecycle. Claude Code loads project-specific CLAUDE.md and skills from each working directory.
+
+
+### Document References
 
 | Document | Contents |
 |----------|----------|
@@ -74,6 +177,10 @@ Created by **Xu Han** — [github.com/xuhancn](https://github.com/xuhancn)
 | [docs/spawn-mechanism.md](docs/spawn-mechanism.md) | Claude Code spawn protocol, NDJSON format |
 | [docs/mcp-spec.md](docs/mcp-spec.md) | MCP tool definitions (Claude Code integration) |
 
+---
+
 ## License
 
 MIT
+
+Created by **Xu Han** — [github.com/xuhancn](https://github.com/xuhancn)
