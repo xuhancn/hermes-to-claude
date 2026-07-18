@@ -27,6 +27,13 @@ async function cmd_enable() {
   console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
 
   server = createServer(key);
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      process.stderr.write(`Port ${port} already in use — hbridge may already be running\n`);
+    } else {
+      process.stderr.write(`Server error: ${err.message}\n`);
+    }
+  });
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
 
