@@ -274,7 +274,7 @@ hbridge auto-registers as an MCP server on `npm install` (via postinstall):
 
 ```
 ~/.claude.json:
-  mcpServers.hbridge → node dist/hbridge.mjs --stdio
+  mcpServers.hbridge → node dist/hbridge.mjs --stdio    # internal — Hermes uses --enable
 
 ~/.claude/settings.json:
   statusLine.command → node dist/statusline.mjs

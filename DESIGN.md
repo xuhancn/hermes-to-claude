@@ -11,7 +11,7 @@ npm install
   └─ postinstall: register MCP + statusLine in ~/.claude configs
 
 Claude Code
-  └─ spawn node dist/hbridge.mjs --stdio (MCP child process)
+  └─ spawn node dist/hbridge.mjs --stdio (MCP child process — internal only)
        │
        ├─ MCP tools: enable / disable / status / status_bar
        │

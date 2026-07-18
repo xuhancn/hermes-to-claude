@@ -96,7 +96,10 @@ if (isHome()) {
 } else if (cmd === "--enable") cmd_enable();
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
-else if (cmd === "--stdio") { startMcpServer(); }
+else if (cmd === "--stdio") {
+  console.error("[hbridge] --stdio is deprecated -- use --enable for direct HTTP mode");
+  console.error("[hbridge] --stdio is internal for Claude Code MCP registration only");
+  startMcpServer(); }
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
   console.log("hbridge — Hermes Bridge");
