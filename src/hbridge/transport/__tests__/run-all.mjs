@@ -571,6 +571,71 @@ describe('Bridge — getTaskOutput pending vs done')
   assert(done.retrieval_status === 'success', 'finished task is success')
 }
 
+describe('Bridge — getTaskOutput includes usage data from result message')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-usage', result: '', status: 'running' }
+
+  b._onMessage({
+    type: 'result',
+    subtype: 'success',
+    total_cost_usd: 0.01234,
+    usage: { input_tokens: 150, output_tokens: 300, cache_creation_input_tokens: 10, cache_read_input_tokens: 20 },
+  })
+
+  const stored = b.getTaskOutput('t-usage')
+  assert(stored?.task?.usage !== null && stored?.task?.usage !== undefined, 'usage field present in output')
+  assert(stored.task.usage.total_cost_usd === 0.01234, `total_cost_usd: ${stored.task.usage.total_cost_usd}`)
+  assert(stored.task.usage.input_tokens === 150, `input_tokens: ${stored.task.usage.input_tokens}`)
+  assert(stored.task.usage.output_tokens === 300, `output_tokens: ${stored.task.usage.output_tokens}`)
+  assert(stored.task.usage.cache_creation_input_tokens === 10, `cache_creation: ${stored.task.usage.cache_creation_input_tokens}`)
+  assert(stored.task.usage.cache_read_input_tokens === 20, `cache_read: ${stored.task.usage.cache_read_input_tokens}`)
+}
+
+describe('Bridge — getTaskOutput usage null when no result data')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-no-usage', result: '', status: 'running' }
+  b._onMessage({ stop_reason: 'end_turn' })
+  const stored = b.getTaskOutput('t-no-usage')
+  assert(stored?.task?.usage === null, 'usage is null when no result data')
+}
+
+describe('Bridge — getTask includes usage')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-get-u', result: '', status: 'running' }
+  b._onMessage({
+    type: 'result',
+    subtype: 'success',
+    total_cost_usd: 0.001,
+    usage: { input_tokens: 10, output_tokens: 20 },
+  })
+  const t = b.getTask('t-get-u')
+  assert(t?.usage?.total_cost_usd === 0.001, 'getTask returns usage')
+  assert(t?.usage?.input_tokens === 10, 'getTask returns input_tokens')
+}
+
+describe('Bridge — usage from assistant message with stop_reason')
+{
+  const b = new Bridge()
+  b.transport = { write: async () => {} }
+  b.currentTask = { id: 't-asst-usage', result: '', status: 'running' }
+  b._onMessage({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'done' }] },
+    stop_reason: 'end_turn',
+    total_cost_usd: 0.005,
+    usage: { input_tokens: 80, output_tokens: 120 },
+  })
+  const stored = b.getTaskOutput('t-asst-usage')
+  assert(stored?.task?.usage?.total_cost_usd === 0.005, 'usage from assistant stop_reason')
+  assert(stored?.task?.usage?.input_tokens === 80, 'input_tokens from assistant')
+}
+
 // ===================================================================
 // Phase 3 — Bridge state machine + auto-reconnect + keep-alive
 // ===================================================================
