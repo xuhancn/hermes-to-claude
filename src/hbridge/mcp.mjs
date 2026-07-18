@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { homedir } from "os";
-import { BridgeManager } from "./bridge.mjs";
+import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
 
@@ -40,11 +40,11 @@ export function startMcpServer() {
   });
 
   const key = homeKey(process.cwd());
-  const bridgeManager = new BridgeManager();
+  const bridge = new Bridge();
 
   // Home Mode — auto-start HTTP server (no enable needed)
   if (process.env.HBRIDGE_HOME === "1") {
-    startInboxServer(key, bridgeManager);
+    startInboxServer(key, bridge);
   }
 
   let buf = "";
@@ -95,7 +95,7 @@ function handleMcp(msg, key, bridge) {
     if (name === "hbridge_enable") {
       const port = homePort(process.cwd());
       const k = homeKey(process.cwd());
-      startInboxServer(k, bridgeManager);
+      startInboxServer(k, bridge);
       markRunning(port);
       t = k;
     } else if (name === "hbridge_disable") {

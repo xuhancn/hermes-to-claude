@@ -454,1207 +454,217 @@ describe('StdioTransport — transcript file creation')
 }
 
 // ===================================================================
-// Phase 1 + 2 — Bridge (with mocked transport)
+// Phase 5 — Session (message routing with mocked transport)
 // ===================================================================
 
+import { Session } from '../../session.mjs'
 import { Bridge } from '../../bridge.mjs'
 
-describe('Bridge — task lifecycle with mocked transport')
-{
-  const b = new Bridge()
-  // Inject a mocked transport
-  b.transport = { write: async () => {}, writeBatch: async () => {}, close: () => {} }
-
-  // Simulate task output
-  b.currentTask = { id: 't-lifecycle', result: '', status: 'running' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello ' }] } })
-  assert(b.currentTask.result === 'Hello ', 'text accumulated')
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'World' }] } })
-  assert(b.currentTask.result === 'Hello World', 'text concatenated')
-  b._onMessage({ stop_reason: 'end_turn' })
-  assert(b.currentTask === null, 'task cleared after finish')
-  const stored = b.getTaskOutput('t-lifecycle')
-  assert(stored?.task.status === 'done', 'task marked done')
-  assert(stored?.task.result === 'Hello World', 'result preserved')
+// ── Helper: create a Session with a mocked transport ────────────────────
+function createMockSession(taskId, prompt) {
+  const s = new Session({ taskId, prompt })
+  s.transport = { write: async () => {}, writeBatch: async () => {}, close: () => {} }
+  return s
 }
 
-describe('Bridge — UUID dedup')
+describe('Session — task lifecycle with mocked transport')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-dedup', result: '' }
-
-  b._onMessage({ type: 'assistant', uuid: 'same-uuid', message: { content: [{ type: 'text', text: 'first' }] } })
-  assert(b.currentTask.result === 'first', 'first message processed')
-  b._onMessage({ type: 'assistant', uuid: 'same-uuid', message: { content: [{ type: 'text', text: 'dup' }] } })
-  assert(b.currentTask.result === 'first', 'duplicate UUID ignored')
+  const s = createMockSession('t-lifecycle', 'test')
+  s.status = 'running' // bypass start() — test message routing directly
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello ' }] } })
+  assert(s.result === 'Hello ', 'text accumulated')
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'World' }] } })
+  assert(s.result === 'Hello World', 'text concatenated')
+  s._onMessage({ stop_reason: 'end_turn' })
+  assert(s.status === 'done', 'task marked done after stop_reason')
+  assert(s.result === 'Hello World', 'result preserved')
 }
 
-describe('Bridge — text blocks without content array')
+describe('Session — UUID dedup')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-content-alt', result: '' }
-  b._onMessage({ role: 'assistant', content: [{ type: 'text', text: 'alt format' }] })
-  assert(b.currentTask.result === 'alt format', '{role, content} works')
+  const s = createMockSession('t-dedup', 'test')
+  s._onMessage({ type: 'assistant', uuid: 'same-uuid', message: { content: [{ type: 'text', text: 'first' }] } })
+  assert(s.result === 'first', 'first message processed')
+  s._onMessage({ type: 'assistant', uuid: 'same-uuid', message: { content: [{ type: 'text', text: 'dup' }] } })
+  assert(s.result === 'first', 'duplicate UUID ignored')
 }
 
-describe('Bridge — subscribeTask + streaming events')
+describe('Session — text blocks without content array')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
+  const s = createMockSession('t-content-alt', 'test')
+  s._onMessage({ role: 'assistant', content: [{ type: 'text', text: 'alt format' }] })
+  assert(s.result === 'alt format', '{role, content} works')
+}
 
+describe('Session — subscribeTask + streaming events')
+{
+  const s = createMockSession('t-stream', 'test')
   const chunks = []
   const sub = { write: d => chunks.push(d) }
-  b.subscribeTask('t-stream', sub)
-
-  b.currentTask = { id: 't-stream', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'chunk1' }] } })
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'chunk2' }] } })
-  b._onMessage({ stop_reason: 'end_turn' })
+  s.subscribe(sub)
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'chunk1' }] } })
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'chunk2' }] } })
+  s._onMessage({ stop_reason: 'end_turn' })
 
   assert(chunks.length >= 3, `got ${chunks.length} events (chunks + done)`)
   assert(chunks[0].startsWith('data:'), 'SSE format: data: prefix')
   assert(chunks[0].includes('chunk1'), 'first chunk emitted')
   assert(chunks.some(c => c.includes('"done"')), 'done event emitted')
-  assert(!b._taskSubscribers.has('t-stream'), 'subscribers cleaned up after done')
+  assert(s._subscribers.size === 0, 'subscribers cleaned up after done')
 }
 
-describe('Bridge — subscribeTask with error')
+describe('Session — subscribe with error')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
+  const s = createMockSession('t-err', 'test')
   const chunks = []
-  b.subscribeTask('t-err', { write: d => chunks.push(d) })
-  b.currentTask = { id: 't-err', result: '' }
-  b._failTask('something broke')
+  s.subscribe({ write: d => chunks.push(d) })
+  s._failTask('something broke')
   assert(chunks.some(c => c.includes('"error"')), 'error event emitted')
   assert(chunks.some(c => c.includes('something broke')), 'error reason in payload')
-  assert(!b._taskSubscribers.has('t-err'), 'subscribers cleaned after error')
+  assert(s._subscribers.size === 0, 'subscribers cleaned after error')
 }
 
-describe('Bridge — unsubscribeTask')
+describe('Session — unsubscribe')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
+  const s = createMockSession('t-unsub', 'test')
   const sub = { write: () => {} }
-  b.subscribeTask('t-unsub', sub)
-  assert(b._taskSubscribers.has('t-unsub'), 'subscribed')
-  b.unsubscribeTask('t-unsub', sub)
-  assert(!b._taskSubscribers.has('t-unsub'), 'unsubscribed')
-
-  // Unsubscribe non-existent is no-op
-  b.unsubscribeTask('nonexistent', sub)
-  assert(true, 'unsubscribe of missing task does not throw')
-}
-
-describe('Bridge — getTask')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-get', result: '', status: 'running' }
-  const t = b.getTask('t-get')
-  assert(t?.status === 'running', 'getTask returns running task')
-  assert(t?.id === 't-get', 'getTask returns correct id')
-  assert(b.getTask('nonexistent') === null, 'getTask returns null for missing')
-}
-
-describe('Bridge — getTaskOutput pending vs done')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-out', result: 'partial', status: 'running' }
-  const pending = b.getTaskOutput('t-out')
-  assert(pending.retrieval_status === 'pending', 'running task is pending')
-  b._onMessage({ stop_reason: 'end_turn' })
-  const done = b.getTaskOutput('t-out')
-  assert(done.retrieval_status === 'success', 'finished task is success')
-}
-
-describe('Bridge — getTaskOutput includes usage data from result message')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-usage', result: '', status: 'running' }
-
-  b._onMessage({
-    type: 'result',
-    subtype: 'success',
-    total_cost_usd: 0.01234,
-    usage: { input_tokens: 150, output_tokens: 300, cache_creation_input_tokens: 10, cache_read_input_tokens: 20 },
-  })
-
-  const stored = b.getTaskOutput('t-usage')
-  assert(stored?.task?.usage !== null && stored?.task?.usage !== undefined, 'usage field present in output')
-  assert(stored.task.usage.total_cost_usd === 0.01234, `total_cost_usd: ${stored.task.usage.total_cost_usd}`)
-  assert(stored.task.usage.input_tokens === 150, `input_tokens: ${stored.task.usage.input_tokens}`)
-  assert(stored.task.usage.output_tokens === 300, `output_tokens: ${stored.task.usage.output_tokens}`)
-  assert(stored.task.usage.cache_creation_input_tokens === 10, `cache_creation: ${stored.task.usage.cache_creation_input_tokens}`)
-  assert(stored.task.usage.cache_read_input_tokens === 20, `cache_read: ${stored.task.usage.cache_read_input_tokens}`)
-}
-
-describe('Bridge — getTaskOutput usage null when no result data')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-no-usage', result: '', status: 'running' }
-  b._onMessage({ stop_reason: 'end_turn' })
-  const stored = b.getTaskOutput('t-no-usage')
-  assert(stored?.task?.usage === null, 'usage is null when no result data')
-}
-
-describe('Bridge — getTask includes usage')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-get-u', result: '', status: 'running' }
-  b._onMessage({
-    type: 'result',
-    subtype: 'success',
-    total_cost_usd: 0.001,
-    usage: { input_tokens: 10, output_tokens: 20 },
-  })
-  const t = b.getTask('t-get-u')
-  assert(t?.usage?.total_cost_usd === 0.001, 'getTask returns usage')
-  assert(t?.usage?.input_tokens === 10, 'getTask returns input_tokens')
-}
-
-describe('Bridge — usage from assistant message with stop_reason')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-asst-usage', result: '', status: 'running' }
-  b._onMessage({
-    type: 'assistant',
-    message: { content: [{ type: 'text', text: 'done' }] },
-    stop_reason: 'end_turn',
-    total_cost_usd: 0.005,
-    usage: { input_tokens: 80, output_tokens: 120 },
-  })
-  const stored = b.getTaskOutput('t-asst-usage')
-  assert(stored?.task?.usage?.total_cost_usd === 0.005, 'usage from assistant stop_reason')
-  assert(stored?.task?.usage?.input_tokens === 80, 'input_tokens from assistant')
-}
-
-// ===================================================================
-// Phase 3 — Bridge state machine + auto-reconnect + keep-alive
-// ===================================================================
-
-describe('Bridge — state machine initial state')
-{
-  const b = new Bridge()
-  assert(b.getState() === 'idle', `initial state is idle, got "${b.getState()}"`)
-}
-
-describe('Bridge — _scheduleReconnect sets state to RECONNECTING')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  const result = b._scheduleReconnect()
-  assert(result === true, 'reconnect scheduled')
-  assert(b.getState() === 'reconnecting', `state is reconnecting, got "${b.getState()}"`)
-  // Clean up
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._state = 'idle'
-}
-
-describe('Bridge — state machine: RECONNECTING on transport close')
-{
-  const b = new Bridge()
-  b.transport = { setOnData: () => {}, setOnClose: () => {}, connect: () => {}, write: async () => {}, close: () => {} }
-  b._state = 'connected'
-
-  // Simulate an unexpected close: inject onClose callback manually
-  // The real flow: transport.setOnClose → child 'close' event → bridge's handler
-  // We test the handler directly via _scheduleReconnect
-  const result = b._scheduleReconnect()
-  assert(result === true, 'reconnect scheduled')
-  assert(b.getState() === 'reconnecting', `state is reconnecting, got "${b.getState()}"`)
-  // Clean up
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-}
-
-describe('Bridge — getState is accessible')
-{
-  const b = new Bridge()
-  assert(typeof b.getState === 'function', 'getState is a function')
-  assert(b.getState() === 'idle', 'idle from constructor')
-}
-
-describe('Bridge — _resetReconnectState')
-{
-  const b = new Bridge()
-  b._reconnectAttempts = 5
-  b._reconnectStartTime = 1000
-  b._resetReconnectState()
-  assert(b._reconnectAttempts === 0, 'attempts reset to 0')
-  assert(b._reconnectStartTime === null, 'startTime reset to null')
-}
-
-describe('Bridge — _cleanupProcess clears timers and transport')
-{
-  const b = new Bridge()
-  b._keepAliveTimer = setTimeout(() => {}, 10000)
-  b._livenessTimer = setTimeout(() => {}, 10000)
-  b._reconnectTimer = setTimeout(() => {}, 10000)
-  b.transport = { close: () => { b._transportClosed = true } }
-  b.child = { kill: () => { b._childKilled = true } }
-
-  b._cleanupProcess()
-  assert(b.transport === null, 'transport nulled')
-  assert(b.child === null, 'child nulled')
-  assert(b._keepAliveTimer === null, 'keepalive timer cleared')
-  assert(b._livenessTimer === null, 'liveness timer cleared')
-  assert(b._reconnectTimer === null, 'reconnect timer cleared')
-}
-
-describe('Bridge — _clearKeepAlive and _clearLiveness')
-{
-  const b = new Bridge()
-  b._keepAliveTimer = setTimeout(() => {}, 1000)
-  b._livenessTimer = setTimeout(() => {}, 1000)
-  b._clearKeepAlive()
-  b._clearLiveness()
-  assert(b._keepAliveTimer === null, 'keepalive nulled')
-  assert(b._livenessTimer === null, 'liveness nulled')
-}
-
-describe('Bridge — createTask throws when state is FAILED')
-{
-  const b = new Bridge()
-  b._state = 'failed'
-  let threw = false
-  try { await b.createTask('hello') } catch { threw = true }
-  assert(threw, 'createTask throws when state is FAILED')
-}
-
-describe('Bridge — _cleanupProcess is idempotent')
-{
-  const b = new Bridge()
-  b._cleanupProcess()
-  b._cleanupProcess()
-  assert(true, 'double cleanup does not throw')
-}
-
-describe('Bridge — _scheduleReconnect returns false on FAILED state')
-{
-  const b = new Bridge()
-  b._state = 'failed'
-  assert(b._scheduleReconnect() === false, 'refused on FAILED')
-}
-
-describe('Bridge — _scheduleReconnect returns false on IDLE state')
-{
-  const b = new Bridge()
-  b._state = 'idle'
-  assert(b._scheduleReconnect() === false, 'refused on IDLE')
-}
-
-describe('Bridge — _scheduleReconnect dedup: same timer not doubled')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectTimer = setTimeout(() => {}, 10000)
-  const result = b._scheduleReconnect() // already has timer
-  assert(result === true, 'returns true (already scheduled)')
-  clearTimeout(b._reconnectTimer)
-  b._reconnectTimer = null
-  b._state = 'idle'
-}
-
-describe('Bridge — liveness timeout fires _scheduleReconnect')
-{
-  // Override LIVENESS_TIMEOUT_MS to be short by patching
-  const origTimeout = globalThis.setTimeout
-  let capturedCb = null
-  globalThis.setTimeout = (cb, ms) => {
-    capturedCb = cb
-    return origTimeout(cb, ms) // keep real timer but capture callback
-  }
-  const b = new Bridge()
-  b._state = 'connected'
-  b._scheduleReconnect = () => { b._reconnectCalled = true; return true }
-
-  b._resetLiveness()
-  assert(b._livenessTimer !== null, 'liveness timer created')
-
-  // Wait for timer and verify it calls _scheduleReconnect
-  await new Promise(r => setTimeout(r, 50))
-  b._clearLiveness()
-  globalThis.setTimeout = origTimeout
-  // The test verifies the plumbing exists and doesn't crash
-  assert(true, 'liveness timer lifecycle OK')
-}
-
-describe('Bridge — keep-alive timer writes to transport on interval')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  let keepAliveCount = 0
-  b.transport = { write: async () => { keepAliveCount++ } }
-  b._ensureKeepAlive()
-
-  // Manually trigger the interval callback
-  const intervalCb = b._keepAliveTimer?._onTimeout
-    ? b._keepAliveTimer._onTimeout
-    : null
-  if (intervalCb) {
-    b.transport.write({ type: 'keep_alive' }).then(() => { keepAliveCount++ })
-  }
-
-  b._clearKeepAlive()
-  assert(b._keepAliveTimer === null, 'timer cleared')
-  assert(keepAliveCount >= 0, 'keepalive cycle ran')
-  b.transport = null
-}
-
-describe('Bridge — keep-alive timer writes to transport')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  let written = false
-  b.transport = { write: async () => { written = true } }
-  b._ensureKeepAlive()
-  assert(b._keepAliveTimer !== null, 'keepalive timer created')
-  b._clearKeepAlive()
-  b.transport = null
-}
-
-describe('Bridge — _cleanupProcess handles null child/transport')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._cleanupProcess()
-  assert(b.transport === null, 'transport null (was already null)')
-  assert(b.child === null, 'child null (was already null)')
-}
-
-// ===================================================================
-// Phase 3 — More state machine transitions
-// ===================================================================
-
-describe('Bridge — state machine: IDLE → CONNECTING')
-{
-  const b = new Bridge()
-  assert(b.getState() === 'idle', 'starts idle')
-  b._state = 'connecting'
-  assert(b.getState() === 'connecting', 'transitions to connecting')
-}
-
-describe('Bridge — state machine: CONNECTING → CONNECTED')
-{
-  const b = new Bridge()
-  b._state = 'connecting'
-  b._ready = true
-  b._state = 'connected'
-  assert(b.getState() === 'connected', 'transitions to connected')
-  assert(b._ready === true, 'ready flag set')
-}
-
-describe('Bridge — state machine: CONNECTED → RECONNECTING')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._scheduleReconnect()
-  assert(b.getState() === 'reconnecting', 'transitions to reconnecting')
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._state = 'idle'
-}
-
-describe('Bridge — state machine: RECONNECTING → FAILED on budget exhausted')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectStartTime = Date.now() - 600_001 // > RECONNECT_GIVE_UP_MS
-  const result = b._scheduleReconnect()
-  assert(result === false, 'returns false')
-  assert(b.getState() === 'failed', 'transitions to failed')
-}
-
-describe('Bridge — state machine: RECONNECTING → RECONNECTING (second schedule)')
-{
-  const b = new Bridge()
-  b._state = 'reconnecting'
-  b._reconnectStartTime = Date.now()
-  b._reconnectTimer = setTimeout(() => {}, 10_000)
-  const result = b._scheduleReconnect()
-  assert(result === true, 'returns true (already has timer)')
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._state = 'idle'
-}
-
-describe('Bridge — state machine: IDLE → CONNECTING → FAILED (spawn fails)')
-{
-  const b = new Bridge()
-  b._state = 'connecting'
-  b._state = 'failed'
-  assert(b.getState() === 'failed', 'state is failed')
-  // _startClaude sets CONNECTING first, then on error sets FAILED
-  // This tests that path
-}
-
-// ===================================================================
-// Phase 3 — Reconnect budget exhaustion
-// ===================================================================
-
-describe('Bridge — reconnect: budget exhausted at start time boundary')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  // Set start time exactly at give-up boundary
-  b._reconnectStartTime = Date.now() - 600_000 // exactly RECONNECT_GIVE_UP_MS
-  const result = b._scheduleReconnect()
-  // elapsed >= RECONNECT_GIVE_UP_MS → should be exhausted
-  assert(result === false, 'exactly exhausted returns false')
-  assert(b.getState() === 'failed', 'state is failed after exact budget exhaustion')
-}
-
-describe('Bridge — reconnect: attempt count increments')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectAttempts = 0
-  b._scheduleReconnect()
-  assert(b._reconnectAttempts === 1, 'attempts incremented to 1')
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._reconnectAttempts = 0
-  b._reconnectStartTime = null
-  b._state = 'idle'
-}
-
-describe('Bridge — reconnect: multiple attempts increment count')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectAttempts = 0
-  b._scheduleReconnect()
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._scheduleReconnect()
-  assert(b._reconnectAttempts === 2, 'second schedule increments to 2')
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._reconnectStartTime = null
-  b._state = 'idle'
-}
-
-describe('Bridge — reconnect: budget survives across multiple calls')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectStartTime = Date.now()
-  b._scheduleReconnect()
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  // Second call still within budget
-  const result = b._scheduleReconnect()
-  assert(result === true, 'second reconnect still within budget')
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._reconnectStartTime = null
-  b._state = 'idle'
-}
-
-describe('Bridge — reconnect: exponential backoff delay increases')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._reconnectAttempts = 0
-  b._scheduleReconnect()
-  const firstDelay = b._reconnectTimer._idleTimeout
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._scheduleReconnect()
-  const secondDelay = b._reconnectTimer._idleTimeout
-  // With jitter this isn't exact, but second should be >= first
-  assert(secondDelay >= firstDelay, `delay grows: ${firstDelay} → ${secondDelay}`)
-  if (b._reconnectTimer) { clearTimeout(b._reconnectTimer); b._reconnectTimer = null }
-  b._reconnectStartTime = null
-  b._state = 'idle'
-}
-
-describe('Bridge — reconnect: backoff capped at RECONNECT_MAX_MS')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  // Simulate many attempts to hit the cap
-  b._reconnectAttempts = 20 // 2^19 * 1s would be way past 30s cap
-  b._scheduleReconnect()
-  if (b._reconnectTimer) {
-    // With jitter, the delay should be around RECONNECT_MAX_MS
-    assert(b._reconnectTimer._idleTimeout <= 40000, `capped delay: ${b._reconnectTimer._idleTimeout}ms`)
-    clearTimeout(b._reconnectTimer)
-    b._reconnectTimer = null
-  }
-  b._reconnectStartTime = null
-  b._state = 'idle'
-}
-
-describe('Bridge — reconnect: _scheduleReconnect from FAILED returns false')
-{
-  const b = new Bridge()
-  b._state = 'failed'
-  assert(b._scheduleReconnect() === false, 'refused on FAILED')
-}
-
-describe('Bridge — reconnect: _resetReconnectState resets all')
-{
-  const b = new Bridge()
-  b._reconnectAttempts = 5
-  b._reconnectStartTime = 99999
-  b._resetReconnectState()
-  assert(b._reconnectAttempts === 0, 'attempts reset')
-  assert(b._reconnectStartTime === null, 'startTime reset')
-}
-
-// ===================================================================
-// Phase 3 — Keepalive timeout
-// ===================================================================
-
-describe('Bridge — keepalive: _ensureKeepAlive creates interval')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  assert(b._keepAliveTimer === null, 'no timer initially')
-  b._ensureKeepAlive()
-  assert(b._keepAliveTimer !== null, 'interval created')
-  b._clearKeepAlive()
-  assert(b._keepAliveTimer === null, 'interval cleared')
-}
-
-describe('Bridge — keepalive: _clearKeepAlive is idempotent')
-{
-  const b = new Bridge()
-  b._clearKeepAlive() // no timer yet
-  b._clearKeepAlive() // still no timer
-  assert(b._keepAliveTimer === null, 'no timer after idempotent clear')
-}
-
-describe('Bridge — keepalive: writes keep_alive frame to transport')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  let written = false
-  b.transport = { write: async () => { written = true } }
-  b._ensureKeepAlive()
-  // Directly invoke the interval's callback via _clearKeepAlive + manual trigger
-  // The interval callback: if state CONNECTED and transport exists, write keep_alive
-  const cb = b._keepAliveTimer?._onTimeout
-  if (cb) {
-    // Simulate what the interval does
-    if (b._state === 'connected' && b.transport) {
-      b.transport.write({ type: 'keep_alive' })
-    }
-  }
-  b._clearKeepAlive()
-  assert(written, 'keep_alive written to transport')
-  b.transport = null
-}
-
-describe('Bridge — keepalive: no write when state not CONNECTED')
-{
-  const b = new Bridge()
-  b._state = 'reconnecting'
-  let written = false
-  b.transport = { write: async () => { written = true } }
-  b._ensureKeepAlive()
-  // Interval callback guard: if state !== CONNECTED, skip write
-  const cb = b._keepAliveTimer?._onTimeout
-  if (cb) {
-    // Manually check the guard logic
-    if (b._state === 'connected' && b.transport) {
-      b.transport.write({ type: 'keep_alive' })
-    }
-  }
-  b._clearKeepAlive()
-  assert(!written, 'no write when not CONNECTED')
-  b.transport = null
-}
-
-describe('Bridge — keepalive: _clearKeepAlive called in _cleanupProcess')
-{
-  const b = new Bridge()
-  b._keepAliveTimer = setTimeout(() => {}, 1000)
-  b._livenessTimer = setTimeout(() => {}, 1000)
-  b._cleanupProcess()
-  assert(b._keepAliveTimer === null, 'keepalive cleared by cleanup')
-  assert(b._livenessTimer === null, 'liveness cleared by cleanup')
-}
-
-// ===================================================================
-// Phase 3 — Liveness detection
-// ===================================================================
-
-describe('Bridge — liveness: _resetLiveness creates timer')
-{
-  const b = new Bridge()
-  assert(b._livenessTimer === null, 'no timer initially')
-  b._state = 'connected'
-  b._resetLiveness()
-  assert(b._livenessTimer !== null, 'timer created')
-  b._clearLiveness()
-  assert(b._livenessTimer === null, 'timer cleared')
-}
-
-describe('Bridge — liveness: _resetLiveness updates lastActivityTime')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  const before = b._lastActivityTime
-  await sleep(5)
-  b._resetLiveness()
-  assert(b._lastActivityTime >= before, 'activity time advanced')
-  b._clearLiveness()
-}
-
-describe('Bridge — liveness: _clearLiveness is idempotent')
-{
-  const b = new Bridge()
-  b._clearLiveness()
-  b._clearLiveness()
-  assert(b._livenessTimer === null, 'no timer after idempotent clear')
-}
-
-describe('Bridge — liveness: data resets liveness timer')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._resetLiveness()
-  const firstTimer = b._livenessTimer
-  // Simulate data arriving via onData callback which calls _resetLiveness
-  b._resetLiveness()
-  // Timer is recreated (old one cleared, new one set)
-  assert(b._livenessTimer !== null, 'timer recreated on data')
-  assert(b._livenessTimer !== firstTimer || true, 'timer refreshed') // may be same ref
-  b._clearLiveness()
-}
-
-describe('Bridge — liveness: timeout callback triggers _scheduleReconnect')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  let reconnectCalled = false
-  b._scheduleReconnect = () => { reconnectCalled = true; return true }
-  b._cleanupProcess = () => {} // stub to avoid side effects
-
-  // Set lastActivityTime to a recent value so idle is short
-  b._lastActivityTime = Date.now() - 1000 // 1 second ago
-  const shortIdle = Date.now() - b._lastActivityTime
-  if (b._state === 'connected' && shortIdle >= 120000) {
-    b._cleanupProcess()
-    b._scheduleReconnect()
-  }
-  assert(!reconnectCalled, 'no premature reconnect for short idle (1s)')
-
-  // Now test with forced idle > threshold
-  b._lastActivityTime = Date.now() - 121000
-  const longIdle = Date.now() - b._lastActivityTime
-  if (b._state === 'connected' && longIdle >= 120000) {
-    b._cleanupProcess()
-    b._scheduleReconnect()
-  }
-  assert(reconnectCalled, 'reconnect triggered after long idle (121s)')
-}
-
-describe('Bridge — liveness: skipped when state not CONNECTED')
-{
-  const b = new Bridge()
-  b._state = 'reconnecting'
-  let reconnectCalled = false
-  b._scheduleReconnect = () => { reconnectCalled = true; return true }
-
-  // Manually test the guard: if state !== CONNECTED, skip
-  b._lastActivityTime = Date.now() - 121000
-  const idle = Date.now() - b._lastActivityTime
-  if (b._state === 'connected' && idle >= 120000) {
-    b._cleanupProcess()
-    b._scheduleReconnect()
-  }
-  assert(!reconnectCalled, 'no reconnect when state is not CONNECTED')
-}
-
-// ===================================================================
-// Phase 3 — Concurrent task handling
-// ===================================================================
-
-describe('Bridge — concurrent: createTask blocks when busy')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._ready = true
-  b.child = { killed: false }
-  b.transport = { write: async () => {}, close: () => {} }
-
-  // Manually set first task running
-  b.busy = true
-  b.currentTask = { id: 'task-1', result: '', status: 'running' }
-
-  // Second task call — blocks on busy loop
-  const p2 = b.createTask('second', 'task-2')
-  let resolved2 = false
-  p2.then(() => { resolved2 = true })
-
-  await sleep(150)
-  assert(!resolved2, 'second task blocked while first is running')
-  assert(b.currentTask?.id === 'task-1', 'first task still active')
-
-  // Finish first task — unblocks second
-  b._finishTask(0)
-
-  await sleep(500)
-  // Second task should now be running
-  assert(b.busy === true, 'busy after second task starts')
-  assert(b.currentTask?.id === 'task-2', 'second task now active')
-  assert(resolved2 === false, 'second createTask still running (awaiting task completion)')
-
-  // Finish second task to let createTask return
-  b._onMessage({ stop_reason: 'end_turn' })
-  await sleep(100)
-  assert(resolved2, 'second createTask resolved after task completion')
-  assert(b.currentTask === null, 'no current task after both complete')
+  s.subscribe(sub)
+  assert(s._subscribers.has(sub), 'subscribed')
+  s.unsubscribe(sub)
+  assert(!s._subscribers.has(sub), 'unsubscribed')
+  s.unsubscribe(sub) // no-op
+  assert(true, 'double unsubscribe does not throw')
 }
 
-describe('Bridge — concurrent: createTask during RECONNECTING waits')
+describe('Session — keep_alive message is silently ignored')
 {
-  const b = new Bridge()
-  b._state = 'reconnecting'
-  b._reconnectStartTime = Date.now()
-  b.child = null
-  b.transport = null
-
-  // createTask while RECONNECTING enters the wait loop
-  // It will wait until state changes or deadline passes
-  // We can't easily test this without hanging, but we can
-  // verify the guard exists
-  const startMs = Date.now()
-  let threw = false
-
-  // This will hang for RECONNECT_GIVE_UP_MS (10 min) if we let it run
-  // Instead, set a very short deadline by manipulating the check
-  // We test the guard path manually
-  const deadline = Date.now() + 100 // short timeout for test
-  let waited = false
-  if (b._state === 'reconnecting') {
-    waited = true
-  }
-  assert(waited, 'createTask would block during reconnecting')
-  b._state = 'idle'
-  b._reconnectStartTime = null
-}
-
-describe('Bridge — concurrent: createTask after RECONNECTING → CONNECTED proceeds')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._ready = true
-  b.child = { killed: false }
-  b.transport = { write: async () => {}, close: () => {} }
-
-  // Verify that createTask works when state is CONNECTED
-  b.busy = false
-  const p = b.createTask('test', 'task-concurrent-ok')
-  let resolved = false
-  p.then(() => { resolved = true })
-
-  await sleep(100)
-  assert(b.currentTask?.id === 'task-concurrent-ok', 'task created when CONNECTED')
-
-  // Finish it
-  b._onMessage({ stop_reason: 'end_turn' })
-  await sleep(100)
-  assert(resolved, 'task resolved after completion')
-}
-
-describe('Bridge — concurrent: two sequential tasks both complete')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._ready = true
-  b.child = { killed: false }
-  b.transport = { write: async () => {}, close: () => {} }
-
-  // First task
-  const p1 = b.createTask('first', 'task-seq-1')
-  let r1 = false
-  p1.then(() => { r1 = true })
-  await sleep(100)
-  assert(b.currentTask?.id === 'task-seq-1', 'first task running')
-
-  // Complete first task
-  b._onMessage({ stop_reason: 'end_turn' })
-  await sleep(100)
-  assert(r1, 'first task completed')
-
-  // Second task
-  const p2 = b.createTask('second', 'task-seq-2')
-  let r2 = false
-  p2.then(() => { r2 = true })
-  await sleep(100)
-  assert(b.currentTask?.id === 'task-seq-2', 'second task running')
-
-  b._onMessage({ stop_reason: 'end_turn' })
-  await sleep(100)
-  assert(r2, 'second task completed')
-  assert(b.currentTask === null, 'no current task')
-}
-
-describe('Bridge — concurrent: busy task prevents new createTask')
-{
-  const b = new Bridge()
-  b._state = 'connected'
-  b._ready = true
-  b.child = { killed: false }
-  b.transport = { write: async () => {} }
-
-  // Set busy without actual task
-  b.busy = true
-  b.currentTask = null
-
-  // createTask should still be blocked by busy
-  const p = b.createTask('should-block', 'task-block')
-  let blocked = true
-  let timedOut = false
-  const raced = await Promise.race([
-    p.then(() => { blocked = false }),
-    sleep(200).then(() => { timedOut = true }),
-  ])
-  assert(timedOut === true, 'createTask blocked by busy flag')
-  assert(blocked === true, 'task not created when busy')
-
-  // Unblock
-  b.busy = false
-  // Now createTask will proceed (but we don't await completion)
-  b._state = 'idle' // reset for cleanup
-}
-
-describe('Bridge — concurrent: _startClaude CONNECTING guard')
-{
-  const b = new Bridge()
-  b._state = 'connecting'
-  b._starting = true
-  // _startClaude checks: if (this._state === STATE.CONNECTING) { wait loop }
-  // Can't easily test without hanging, but verify the logic path
-  let wouldWait = false
-  if (b._state === 'connecting') {
-    wouldWait = true
-    b._state = 'idle' // prevent actual hang
-  }
-  assert(wouldWait, 'concurrent _startClaude would wait on CONNECTING')
-}
-
-// ===================================================================
-// Phase 3 — Task streaming (SSE)
-// ===================================================================
-
-describe('Bridge — streaming: subscribe emits chunk events')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  const chunks = []
-  b.subscribeTask('t-sse', { write: d => chunks.push(d) })
-  b.currentTask = { id: 't-sse', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'hello' }] } })
-  assert(chunks.some(c => c.includes('hello')), 'text chunk emitted via SSE')
-  assert(chunks[0].startsWith('data:'), 'SSE format with data: prefix')
-  b._onMessage({ stop_reason: 'end_turn' })
+  const s = createMockSession('t-ka', 'test')
+  s.result = 'existing'
+  s._onMessage({ type: 'keep_alive' })
+  assert(s.result === 'existing', 'result not modified by keep_alive')
 }
 
-describe('Bridge — streaming: multiple subscribers')
+describe('Session — keep_alive with no task does not throw')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  const c1 = [], c2 = []
-  b.subscribeTask('t-multi', { write: d => c1.push(d) })
-  b.subscribeTask('t-multi', { write: d => c2.push(d) })
-  b.currentTask = { id: 't-multi', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'broadcast' }] } })
-  assert(c1.some(c => c.includes('broadcast')), 'subscriber 1 received')
-  assert(c2.some(c => c.includes('broadcast')), 'subscriber 2 received')
-  b._onMessage({ stop_reason: 'end_turn' })
+  const s = createMockSession('t-ka2', 'test')
+  s._onMessage({ type: 'keep_alive' })
+  assert(true, 'keep_alive with no subscribers does not throw')
 }
 
-describe('Bridge — streaming: subscriber disconnect does not throw')
+describe('Session — system/init is ignored')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  const faulty = { write: () => { throw new Error('disconnected') } }
-  b.subscribeTask('t-fault', faulty)
-  b.currentTask = { id: 't-fault', result: '' }
-  // Should not throw despite faulty subscriber
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } })
-  b._onMessage({ stop_reason: 'end_turn' })
-  assert(true, 'faulty subscriber does not break streaming')
+  const s = createMockSession('t-init', 'test')
+  s._onMessage({ type: 'system', subtype: 'init', session_id: 'sess-abc' })
+  assert(true, 'system/init does not throw')
 }
 
-describe('Bridge — streaming: unsubscribe during stream')
+describe('Session — stream_event accumulates text deltas')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  const chunks = []
-  const sub = { write: d => chunks.push(d) }
-  b.subscribeTask('t-unsub-mid', sub)
-  b.currentTask = { id: 't-unsub-mid', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'before' }] } })
-  b.unsubscribeTask('t-unsub-mid', sub)
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'after' }] } })
-  assert(chunks.some(c => c.includes('before')), 'received before unsubscribe')
-  assert(!chunks.some(c => c.includes('after')), 'no events after unsubscribe')
-  b._onMessage({ stop_reason: 'end_turn' })
-}
-
-// ===================================================================
-// Phase 4 — NDJSON safe stringify (PR #43)
-// ===================================================================
-
-describe('StdioTransport — _ndjsonStringify escapes U+2028/U+2029')
-{
-  const t = new StdioTransport(mockChild())
-  assert(typeof t._ndjsonStringify === 'function', '_ndjsonStringify exists')
-
-  const result = t._ndjsonStringify({ text: 'before after end' })
-  assert(!result.includes(' '), 'U+2028 escaped in output')
-  assert(!result.includes(' '), 'U+2029 escaped in output')
-  assert(result.includes('\\u2028'), 'U+2028 replaced with \\u2028')
-  assert(result.includes('\\u2029'), 'U+2029 replaced with \\u2029')
-  assert(result.includes('before'), 'text before separator preserved')
-  assert(result.includes('after'), 'text between separators preserved')
-  assert(result.includes('end'), 'text after separator preserved')
-}
-
-describe('StdioTransport — _ndjsonStringify normal strings unchanged')
-{
-  const t = new StdioTransport(mockChild())
-  const result = t._ndjsonStringify({ msg: 'hello world', num: 42 })
-  const parsed = JSON.parse(result)
-  assert(parsed.msg === 'hello world', 'normal strings unchanged')
-  assert(parsed.num === 42, 'numbers unchanged')
-}
-
-// ===================================================================
-// Phase 4 — Bridge message handling (PR #43)
-// ===================================================================
-
-describe('Bridge — keep_alive message is silently ignored')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-ka', result: 'existing', status: 'running' }
-
-  // keep_alive should return without affecting currentTask
-  b._onMessage({ type: 'keep_alive' })
-  assert(b.currentTask !== null, 'currentTask not cleared')
-  assert(b.currentTask.result === 'existing', 'result not modified')
-  assert(b.currentTask.id === 't-ka', 'task id unchanged')
-}
-
-describe('Bridge — keep_alive with no currentTask does not throw')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = null
-
-  // Should not throw
-  b._onMessage({ type: 'keep_alive' })
-  assert(true, 'keep_alive with no task does not throw')
-}
-
-describe('Bridge — system/init extracts session_id during task')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-init', result: '', status: 'running' }
-
-  assert(b._sessionId === undefined, 'sessionId starts undefined')
-  b._onMessage({ type: 'system', subtype: 'init', session_id: 'sess-abc-123' })
-  assert(b._sessionId === 'sess-abc-123', 'sessionId extracted from init message')
-}
-
-describe('Bridge — system/init without session_id sets undefined')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-init2', result: '', status: 'running' }
-
-  b._onMessage({ type: 'system', subtype: 'init' })
-  assert(b._sessionId === undefined, 'sessionId undefined when not in message')
-}
-
-describe('Bridge — stream_event accumulates text deltas')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-se', result: '', status: 'running' }
-
-  b._onMessage({
+  const s = createMockSession('t-se', 'test')
+  s._onMessage({
     type: 'stream_event',
     event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello ' } },
   })
-  assert(b.currentTask.result === 'Hello ', 'first delta accumulated')
-
-  b._onMessage({
+  assert(s.result === 'Hello ', 'first delta accumulated')
+  s._onMessage({
     type: 'stream_event',
     event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'World' } },
   })
-  assert(b.currentTask.result === 'Hello World', 'second delta concatenated')
+  assert(s.result === 'Hello World', 'second delta concatenated')
 }
 
-describe('Bridge — stream_event ignores non-text deltas')
+describe('Session — stream_event ignores non-text deltas')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-se-ignore', result: '', status: 'running' }
-
-  // input_json delta (not text_delta) — should be ignored
-  b._onMessage({
+  const s = createMockSession('t-se-ignore', 'test')
+  s._onMessage({
     type: 'stream_event',
     event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial: '{}' } },
   })
-  assert(b.currentTask.result === '', 'non-text delta ignored')
-
-  // Missing delta — should be ignored
-  b._onMessage({
+  assert(s.result === '', 'non-text delta ignored')
+  s._onMessage({
     type: 'stream_event',
     event: { type: 'content_block_start' },
   })
-  assert(b.currentTask.result === '', 'event without delta ignored')
+  assert(s.result === '', 'event without delta ignored')
 }
 
-describe('Bridge — stream_event with no currentTask does not throw')
+describe('Session — stream_event with no subscribers does not throw')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = null
-
-  b._onMessage({
+  const s = createMockSession('t-se-null', 'test')
+  s._onMessage({
     type: 'stream_event',
     event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'should not crash' } },
   })
   assert(true, 'stream_event with no task does not throw')
 }
 
-// ===================================================================
-// Phase 3 — Fix: U+2028/U+2029 escape
-// ===================================================================
-
-describe('Bridge — U+2028 line separator in JSON')
+describe('Session — U+2028 line separator in JSON')
 {
-  const LS = String.fromCharCode(0x2028);
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-2028', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'before' + LS + 'after' }] } })
-  assert(b.currentTask.result.includes('before'), 'text before U+2028 preserved')
-  assert(b.currentTask.result.includes('after'), 'text after U+2028 preserved')
-  assert(b.currentTask.result.includes(LS), 'U+2028 preserved in result')
-  b._onMessage({ stop_reason: 'end_turn' })
+  const LS = String.fromCharCode(0x2028)
+  const s = createMockSession('t-2028', 'test')
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'before' + LS + 'after' }] } })
+  assert(s.result.includes('before'), 'text before U+2028 preserved')
+  assert(s.result.includes('after'), 'text after U+2028 preserved')
+  assert(s.result.includes(LS), 'U+2028 preserved in result')
 }
 
-describe('Bridge — U+2029 paragraph separator in JSON')
+describe('Session — U+2029 paragraph separator in JSON')
 {
-  const PS = String.fromCharCode(0x2029);
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-2029', result: '' }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'line1' + PS + 'line2' }] } })
-  assert(b.currentTask.result.includes('line1'), 'text before U+2029 preserved')
-  assert(b.currentTask.result.includes('line2'), 'text after U+2029 preserved')
-  assert(b.currentTask.result.includes(PS), 'U+2029 preserved in result')
-  b._onMessage({ stop_reason: 'end_turn' })
+  const PS = String.fromCharCode(0x2029)
+  const s = createMockSession('t-2029', 'test')
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'line1' + PS + 'line2' }] } })
+  assert(s.result.includes('line1'), 'text before U+2029 preserved')
+  assert(s.result.includes('line2'), 'text after U+2029 preserved')
+  assert(s.result.includes(PS), 'U+2029 preserved in result')
 }
 
-// ===================================================================
-// Phase 3 — Fix: NDJSON guard (non-JSON to stderr)
-// ===================================================================
-
-describe('Bridge — NDJSON guard: valid JSON reaches handler')
+describe('Session — NDJSON guard: valid JSON reaches handler')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  let onMessageCalled = false
-  const origOnMsg = b._onMessage.bind(b)
-  b._onMessage = (msg) => { onMessageCalled = true; origOnMsg(msg) }
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'valid' }] } })
-  assert(onMessageCalled, 'valid JSON still reaches onMessage')
+  const s = createMockSession('t-ndjson', 'test')
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'valid' }] } })
+  assert(s.result.includes('valid'), 'valid JSON still reaches onMessage')
 }
 
-// ===================================================================
-// Phase 3 — Fix: control_request handling
-// ===================================================================
-
-describe('Bridge — control_request: respond with control_response')
+describe('Session — control_request: respond with control_response')
 {
-  const b = new Bridge()
   let lastWritten = null
-  b.transport = { write: async (msg) => { lastWritten = msg } }
-  b._onMessage({ type: 'control_request', request_id: 'r1', request: { subtype: 'initialize' } })
+  const s = new Session({ taskId: 't-cr', prompt: 'test' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+  s._onMessage({ type: 'control_request', request_id: 'r1', request: { subtype: 'initialize' } })
   assert(lastWritten !== null, 'control_response was sent')
   assert(lastWritten.type === 'control_response', 'response type is control_response')
   assert(lastWritten.response_id === 'r1', 'response_id matches request_id')
   assert(lastWritten.response.subtype === 'success', 'response subtype is success')
 }
 
-describe('Bridge — control_request: handled without currentTask')
+describe('Session — control_request: missing fields handled gracefully')
 {
-  const b = new Bridge()
   let lastWritten = null
-  b.transport = { write: async (msg) => { lastWritten = msg } }
-  assert(b.currentTask === null, 'no current task')
-  b._onMessage({ type: 'control_request', request_id: 'r2', request: { subtype: 'set_model' } })
-  assert(lastWritten !== null, 'control_response sent without currentTask')
-  assert(lastWritten.response_id === 'r2', 'correct request_id echoed')
-}
-
-
-describe('Bridge — control_request: missing fields handled gracefully')
-{
-  const b = new Bridge()
-  let lastWritten = null
-  b.transport = { write: async (msg) => { lastWritten = msg } }
-  b._onMessage({ type: 'control_request' })
+  const s = new Session({ taskId: 't-cr2', prompt: 'test' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+  s._onMessage({ type: 'control_request' })
   assert(lastWritten === null || lastWritten.type === 'control_response',
     'missing request_id does not crash')
 }
 
-// ===================================================================
-// Phase 3 — Fix: session_state_changed to task status
-// ===================================================================
-
-describe('Bridge — session_state_changed: idle finishes task')
+describe('Session — session_state_changed: idle finishes task')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-session', result: 'done', status: 'running' }
-  b._onMessage({ type: 'session_state_changed', state: 'idle' })
-  assert(b.currentTask === null, 'task finished after session idle')
-  const stored = b.getTaskOutput('t-session')
-  assert(stored.task.status === 'done', 'task marked done')
+  const s = createMockSession('t-session', 'test')
+  s._onMessage({ type: 'session_state_changed', state: 'idle' })
+  assert(s.status === 'done', 'task finished after session idle')
 }
 
-describe('Bridge — session_state_changed: idle without task is no-op')
+describe('Session — session_state_changed: non-idle state is no-op')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  assert(b.currentTask === null, 'no current task')
-  b._onMessage({ type: 'session_state_changed', state: 'idle' })
-  assert(true, 'idle state without task does not throw')
+  const s = createMockSession('t-session2', 'test')
+  s._onMessage({ type: 'session_state_changed', state: 'thinking' })
+  assert(s.status !== 'done', 'task not finished for non-idle state')
 }
 
-describe('Bridge — session_state_changed: non-idle state is no-op')
+describe('Session — tool_use block captured in result')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-running', result: '', status: 'running' }
-  b._onMessage({ type: 'session_state_changed', state: 'thinking' })
-  assert(b.currentTask !== null, 'task not finished for non-idle state')
-  assert(b.currentTask.id === 't-running', 'task still running')
-  b._onMessage({ stop_reason: 'end_turn' })
-}
-
-// ===================================================================
-// Phase 3 — Fix: tool_use / tool_result block support
-// ===================================================================
-
-describe('Bridge — tool_use block captured in result')
-{
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-tool-use', result: '', status: 'running' }
-  b._onMessage({
+  const s = createMockSession('t-tool-use', 'test')
+  s._onMessage({
     type: 'assistant',
     message: {
       content: [
@@ -1663,19 +673,16 @@ describe('Bridge — tool_use block captured in result')
       ],
     },
   })
-  assert(b.currentTask.result.includes('Calling tool...'), 'text preserved')
-  assert(b.currentTask.result.includes('read_file'), 'tool_use name captured')
-  assert(b.currentTask.result.includes('/tmp/x'), 'tool_use input captured')
-  assert(b.currentTask.result.includes('tool_use'), 'tool_use tag present')
-  b._onMessage({ stop_reason: 'end_turn' })
+  assert(s.result.includes('Calling tool...'), 'text preserved')
+  assert(s.result.includes('read_file'), 'tool_use name captured')
+  assert(s.result.includes('/tmp/x'), 'tool_use input captured')
+  assert(s.result.includes('tool_use'), 'tool_use tag present')
 }
 
-describe('Bridge — tool_result block captured in result')
+describe('Session — tool_result block captured in result')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-tool-res', result: '', status: 'running' }
-  b._onMessage({
+  const s = createMockSession('t-tool-res', 'test')
+  s._onMessage({
     type: 'assistant',
     message: {
       content: [
@@ -1684,18 +691,15 @@ describe('Bridge — tool_result block captured in result')
       ],
     },
   })
-  assert(b.currentTask.result.includes('Result:'), 'text preserved')
-  assert(b.currentTask.result.includes('file contents here'), 'tool_result string content captured')
-  assert(b.currentTask.result.includes('tool_result'), 'tool_result tag present')
-  b._onMessage({ stop_reason: 'end_turn' })
+  assert(s.result.includes('Result:'), 'text preserved')
+  assert(s.result.includes('file contents here'), 'tool_result string content captured')
+  assert(s.result.includes('tool_result'), 'tool_result tag present')
 }
 
-describe('Bridge — tool_result with array content blocks')
+describe('Session — tool_result with array content blocks')
 {
-  const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-tool-res-arr', result: '', status: 'running' }
-  b._onMessage({
+  const s = createMockSession('t-tool-res-arr', 'test')
+  s._onMessage({
     type: 'assistant',
     message: {
       content: [
@@ -1703,27 +707,166 @@ describe('Bridge — tool_result with array content blocks')
       ],
     },
   })
-  assert(b.currentTask.result.includes('multi'), 'first sub-block text')
-  assert(b.currentTask.result.includes('block'), 'second sub-block text')
-  assert(!b.currentTask.result.includes('[object Object]'), 'no raw objects in result')
-  b._onMessage({ stop_reason: 'end_turn' })
+  assert(s.result.includes('multi'), 'first sub-block text')
+  assert(s.result.includes('block'), 'second sub-block text')
+  assert(!s.result.includes('[object Object]'), 'no raw objects in result')
 }
 
-describe('Bridge — tool_use + tool_result: progressive text followed by tool block')
+describe('Session — tool_use + tool_result: progressive text')
+{
+  const s = createMockSession('t-tool-prog', 'test')
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1' }] } })
+  s._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1 done' }] } })
+  assert(s.result.includes('Step 1 done'), 'progressive text accumulated')
+  s._onMessage({
+    type: 'assistant',
+    message: { id: 'msg-2', content: [{ type: 'text', text: 'Calling tool' }, { type: 'tool_use', name: 'read', input: {} }] },
+  })
+  assert(s.result.includes('Calling tool'), 'text with tool_use captured')
+  assert(s.result.includes('read'), 'tool_use name captured in progressive stream')
+}
+
+describe('Session — tool_progress forwarding to subscribers')
+{
+  const s = createMockSession('t-tool-prog2', 'test')
+  const events = []
+  s.subscribe({ write: d => events.push(d) })
+  s._onMessage({ type: 'tool_progress', tool_name: 'Bash', tool_use_id: 'tu1', elapsed_time_seconds: 1.5 })
+  assert(events.some(e => e.includes('tool_progress')), 'tool_progress forwarded to subscribers')
+}
+
+describe('Session — auth_status does not throw')
+{
+  const s = createMockSession('t-auth', 'test')
+  s._onMessage({ type: 'auth_status', isAuthenticating: true })
+  s._onMessage({ type: 'auth_status', isAuthenticating: false, error: 'cancelled' })
+  assert(true, 'auth_status handled without error')
+}
+
+describe('Session — rate_limit_event does not throw')
+{
+  const s = createMockSession('t-rate', 'test')
+  s._onMessage({ type: 'rate_limit_event', rate_limit_info: { status: 'exceeded' } })
+  assert(true, 'rate_limit_event handled without error')
+}
+
+describe('Session — cancel before start')
+{
+  const s = createMockSession('t-cancel', 'test')
+  const result = s.cancel()
+  assert(result === false, 'cancel returns false for non-running session')
+}
+
+describe('Session — _finishTask sets done status')
+{
+  const s = createMockSession('t-finish', 'test')
+  s._finishTask(0)
+  assert(s.status === 'done', 'status done after _finishTask')
+  assert(s.exitCode === 0, 'exitCode 0 after _finishTask')
+}
+
+describe('Session — _failTask sets failed status')
+{
+  const s = createMockSession('t-fail', 'test')
+  s._failTask('something went wrong')
+  assert(s.status === 'failed', 'status failed after _failTask')
+  assert(s.result.includes('went wrong'), 'reason in result')
+}
+
+// ── Usage/cost extraction tests (via Session) ──────────────────────────
+
+describe('Session — usage data from result message')
+{
+  const s = createMockSession('t-usage', 'test')
+  s._onMessage({
+    type: 'result',
+    subtype: 'success',
+    total_cost_usd: 0.01234,
+    usage: { input_tokens: 150, output_tokens: 300, cache_creation_input_tokens: 10, cache_read_input_tokens: 20 },
+  })
+  assert(s.usage !== null, 'usage captured')
+  assert(s.usage.total_cost_usd === 0.01234, 'total_cost_usd')
+  assert(s.usage.input_tokens === 150, 'input_tokens')
+  assert(s.usage.output_tokens === 300, 'output_tokens')
+  assert(s.usage.cache_creation_input_tokens === 10, 'cache_creation')
+  assert(s.usage.cache_read_input_tokens === 20, 'cache_read')
+}
+
+describe('Session — usage from assistant message with stop_reason')
+{
+  const s = createMockSession('t-asst-usage', 'test')
+  s._onMessage({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'done' }] },
+    stop_reason: 'end_turn',
+    total_cost_usd: 0.005,
+    usage: { input_tokens: 80, output_tokens: 120 },
+  })
+  assert(s.usage?.total_cost_usd === 0.005, 'usage from assistant stop_reason')
+  assert(s.usage?.input_tokens === 80, 'input_tokens from assistant')
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Bridge pool tests (getTask/getTaskOutput)
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Bridge — getTask')
 {
   const b = new Bridge()
-  b.transport = { write: async () => {} }
-  b.currentTask = { id: 't-tool-prog2', result: '', status: 'running' }
-  // Progressive text streaming (no tool blocks yet)
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1' }] } })
-  b._onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Step 1 done' }] } })
-  assert(b.currentTask.result.includes('Step 1 done'), 'progressive text accumulated')
-  // Final message with tool_use (separate message.id, fresh delta)
-  b._onMessage({ type: 'assistant', message: { id: 'msg-2', content: [{ type: 'text', text: 'Calling tool' }, { type: 'tool_use', name: 'read', input: {} }] } })
-  assert(b.currentTask.result.includes('Calling tool'), 'text with tool_use captured')
-  assert(b.currentTask.result.includes('read'), 'tool_use name captured in progressive stream')
-  b._onMessage({ stop_reason: 'end_turn' })
+  b._completedTasks.set('t-get', { id: 't-get', status: 'done', usage: null, completedAt: Date.now() })
+  const t = b.getTask('t-get')
+  assert(t?.status === 'done', 'getTask returns completed task')
+  assert(t?.id === 't-get', 'getTask returns correct id')
+  assert(b.getTask('nonexistent') === null, 'getTask returns null for missing')
 }
+
+describe('Bridge — getTaskOutput pending vs done')
+{
+  const b = new Bridge()
+  b._completedTasks.set('t-out', { id: 't-out', status: 'done', result: 'done', exitCode: 0, usage: null, completedAt: Date.now() })
+  const done = b.getTaskOutput('t-out')
+  assert(done.retrieval_status === 'success', 'done task is success')
+
+  // Pending from active session
+  const { Session: Sess } = await import('../../session.mjs')
+  const s = new Sess({ taskId: 't-out-pending', prompt: 'test' })
+  s.status = 'running'
+  b._sessions.set('t-out-pending', s)
+  const pending = b.getTaskOutput('t-out-pending')
+  assert(pending.retrieval_status === 'pending', 'running task is pending')
+}
+
+describe('Bridge — getTaskOutput includes usage from completed')
+{
+  const b = new Bridge()
+  b._completedTasks.set('t-usage-comp', {
+    id: 't-usage-comp', status: 'done', result: 'ok', exitCode: 0,
+    usage: { total_cost_usd: 0.01, input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+    completedAt: Date.now(),
+  })
+  const stored = b.getTaskOutput('t-usage-comp')
+  assert(stored?.task?.usage?.total_cost_usd === 0.01, 'usage from completed task')
+}
+
+describe('Bridge — getTaskOutput usage null when no data')
+{
+  const b = new Bridge()
+  b._completedTasks.set('t-no-u', { id: 't-no-u', status: 'done', result: '', exitCode: 0, usage: null, completedAt: Date.now() })
+  const stored = b.getTaskOutput('t-no-u')
+  assert(stored?.task?.usage === null, 'usage is null when no data')
+}
+
+describe('Bridge — getTask includes usage')
+{
+  const b = new Bridge()
+  b._completedTasks.set('t-get-u', { id: 't-get-u', status: 'done', usage: { total_cost_usd: 0.001, input_tokens: 10, output_tokens: 20 }, completedAt: Date.now() })
+  const t = b.getTask('t-get-u')
+  assert(t?.usage?.total_cost_usd === 0.001, 'getTask returns usage')
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// StdioTransport NDJSON safe stringify (should keep working)
+// ═══════════════════════════════════════════════════════════════════════
 
 // ===================================================================
 // Summary

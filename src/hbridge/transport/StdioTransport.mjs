@@ -56,6 +56,11 @@ export class StdioTransport {
       process.stderr.write(`[StdioTransport] parse error: ${err.message}\n`);
     });
 
+    // Transcript path — set null to disable raw NDJSON dump
+    this._transcriptPath = opts.transcriptPath;
+    if (this._transcriptPath === undefined) {
+      this._transcriptPath = join(homedir(), '.hbridge_transcript.jsonl');
+    }
     // Transcript stream — opened in connect(), closed in close()
     this._transcriptStream = null;
 
@@ -155,13 +160,14 @@ export class StdioTransport {
     // Wire up stdout NDJSON parser
     this._rl = createInterface({ input: this.child.stdout });
 
-    // Transcript tee — raw NDJSON dump at ~/.hbridge_transcript.jsonl
-    const transcriptPath = join(homedir(), '.hbridge_transcript.jsonl');
-    this._transcriptStream = createWriteStream(transcriptPath, { flags: 'a' });
-    this._transcriptStream.on('error', (err) => {
-      process.stderr.write(`[StdioTransport] transcript error: ${err.message}\n`);
-      this._transcriptStream = null;
-    });
+    // Transcript tee — raw NDJSON dump (null path = disabled)
+    if (this._transcriptPath) {
+      this._transcriptStream = createWriteStream(this._transcriptPath, { flags: 'a' });
+      this._transcriptStream.on('error', (err) => {
+        process.stderr.write(`[StdioTransport] transcript error: ${err.message}\n`);
+        this._transcriptStream = null;
+      });
+    }
 
     this._rl.on('line', (line) => {
       // Tee raw NDJSON to transcript file (before parse, unfiltered)

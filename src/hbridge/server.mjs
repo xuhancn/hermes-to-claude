@@ -1,15 +1,13 @@
 import { createServer as http } from "http";
-import { Bridge, BridgeManager } from "./bridge.mjs";
+import { Bridge } from "./bridge.mjs";
 import { incrementTasks, writeState } from "./state.mjs";
 import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 
 export function createServer(expectedKey, bridgeInput) {
-  // Accept Bridge, BridgeManager, or undefined
-  const manager = bridgeInput instanceof BridgeManager
-    ? bridgeInput
-    : new BridgeManager(bridgeInput instanceof Bridge ? bridgeInput : undefined);
+  /** @type {Bridge} */
+  const bridge = bridgeInput || new Bridge();
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -73,10 +71,10 @@ export function createServer(expectedKey, bridgeInput) {
               },
             };
             const cleanup = () => {
-              try { manager.unsubscribeTask(taskId, subscriber); } catch {}
+              try { bridge.unsubscribeTask(taskId, subscriber); } catch {}
               try { res.end(); } catch {}
             };
-            manager.subscribeTask(taskId, subscriber);
+            bridge.subscribeTask(taskId, subscriber);
             req.on("close", cleanup);
             return; // handled — no response outside handle()
           }
@@ -88,7 +86,7 @@ export function createServer(expectedKey, bridgeInput) {
           const createOpts = {};
           if (payload.sessionId) createOpts.sessionId = payload.sessionId;
           result = { task_id: taskId, status: "created" };
-          manager.createTask(payload.prompt, taskId, createOpts).catch(err => {
+          bridge.createTask(payload.prompt, taskId, createOpts).catch(err => {
             console.error(`[server] task ${taskId} error: ${err.message}`);
           });
         } else if (endpoint === "task" && action === "cancel" && isPost) {
@@ -99,15 +97,15 @@ export function createServer(expectedKey, bridgeInput) {
           } else {
             const cancelOpts = {};
             if (payload.sessionId) cancelOpts.sessionId = payload.sessionId;
-            const ok = manager.cancelTask(taskId, cancelOpts);
+            const ok = bridge.cancelTask(taskId, cancelOpts);
             result = ok ? { status: "cancelled", task_id: taskId } : { error: "not_found" };
           }
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
-          result = manager.getTaskOutput(taskId) || { error: "not_found" };
+          result = bridge.getTaskOutput(taskId) || { error: "not_found" };
         } else if (endpoint === "task") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
-          result = manager.getTask(taskId) || { error: "not_found" };
+          result = bridge.getTask(taskId) || { error: "not_found" };
         } else {
           status = 404;
           result = { error: "not_found" };

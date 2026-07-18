@@ -9,7 +9,7 @@
  * on read. A cap prevents unbounded growth.
  */
 
-import { readFileSync, appendFileSync, existsSync } from "fs";
+import { readFileSync, appendFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -93,4 +93,23 @@ export function findCompletedTask(taskId) {
  */
 export function getTasksFilePath() {
   return TASKS_FILE;
+}
+
+/**
+ * Trim the tasks file to prevent unbounded growth.
+ * Keeps only the most recent MAX_TASKS entries.
+ * Safe to call periodically (it's a no-op when under limit).
+ */
+export function trimCompletedTasks() {
+  if (!existsSync(TASKS_FILE)) return;
+  try {
+    const content = readFileSync(TASKS_FILE, "utf8");
+    const lines = content.split("\n").filter(Boolean);
+    if (lines.length <= MAX_TASKS) return;
+    const trimmed = lines.slice(lines.length - MAX_TASKS);
+    writeFileSync(TASKS_FILE, trimmed.join("\n") + "\n", "utf8");
+    process.stderr.write(`[persistence] trimmed ${lines.length - trimmed.length} tasks (${trimmed.length} kept)\n`);
+  } catch {
+    // ignore trim errors
+  }
 }
