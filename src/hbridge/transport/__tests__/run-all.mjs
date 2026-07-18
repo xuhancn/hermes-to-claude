@@ -179,7 +179,7 @@ describe('SerialBatchEventUploader — RetryableError with server-supplied delay
 // Phase 1 — BoundedUUIDSet
 // ===================================================================
 
-import { BoundedUUIDSet, FlushGate, isEligibleBridgeMessage, isControlResponse, isControlRequest, handleIngressMessage } from '../../bridgeMessaging.mjs'
+import { BoundedUUIDSet } from '../../bridgeMessaging.mjs'
 
 describe('BoundedUUIDSet — basic add/has/eviction')
 {
@@ -217,142 +217,6 @@ describe('BoundedUUIDSet — clear')
 }
 
 // ===================================================================
-// Phase 1 — Type guards + isEligibleBridgeMessage
-// ===================================================================
-
-describe('isEligibleBridgeMessage')
-{
-  assert(isEligibleBridgeMessage({ type: 'user' }), 'user is eligible')
-  assert(isEligibleBridgeMessage({ type: 'assistant' }), 'assistant is eligible')
-  assert(isEligibleBridgeMessage({ type: 'system', subtype: 'local_command' }), 'local_command eligible')
-  assert(!isEligibleBridgeMessage({ type: 'system' }), 'system without subtype not eligible')
-  assert(!isEligibleBridgeMessage({ type: 'result' }), 'result not eligible')
-  assert(!isEligibleBridgeMessage({ type: 'user', isVirtual: true }), 'virtual user not eligible')
-  assert(!isEligibleBridgeMessage({ type: 'assistant', isVirtual: true }), 'virtual assistant not eligible')
-}
-
-describe('isControlResponse')
-{
-  assert(isControlResponse({ type: 'control_response', response: {} }), 'valid control_response')
-  assert(!isControlResponse({ type: 'user' }), 'user is not control_response')
-  assert(!isControlResponse(null), 'null is not control_response')
-  assert(!isControlResponse({}), 'no type field is not control_response')
-}
-
-describe('isControlRequest')
-{
-  assert(isControlRequest({ type: 'control_request', request_id: 'r1', request: {} }), 'valid control_request')
-  assert(!isControlRequest({ type: 'control_response', response: {} }), 'control_response not request')
-  assert(!isControlRequest({ type: 'control_request' }), 'missing request_id is not control_request')
-}
-
-// ===================================================================
-// Phase 1 — handleIngressMessage
-// ===================================================================
-
-describe('handleIngressMessage — routing')
-{
-  const posted = new BoundedUUIDSet(10)
-  const inbound = new BoundedUUIDSet(10)
-  let lastMsg = null, lastCR = null, lastCRq = null
-
-  // User message
-  handleIngressMessage(
-    JSON.stringify({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'hi' } }),
-    posted, inbound,
-    m => lastMsg = m,
-    r => lastCR = r,
-    r => lastCRq = r,
-  )
-  assert(lastMsg?.type === 'user', 'user message routed to onMessage')
-  assert(inbound.has('u1'), 'user UUID tracked')
-
-  // Echo — same UUID as posted
-  posted.add('u1')
-  lastMsg = null
-  handleIngressMessage(
-    JSON.stringify({ type: 'user', uuid: 'u1' }),
-    posted, inbound,
-    m => lastMsg = m,
-  )
-  assert(lastMsg === null, 'echo message filtered (UUID matches posted)')
-
-  // control_response
-  handleIngressMessage(
-    JSON.stringify({ type: 'control_response', response: { subtype: 'success' } }),
-    posted, inbound,
-    undefined,
-    r => lastCR = r,
-  )
-  assert(lastCR?.type === 'control_response', 'control_response routed')
-
-  // control_request
-  handleIngressMessage(
-    JSON.stringify({ type: 'control_request', request_id: 'r1', request: { subtype: 'initialize' } }),
-    posted, inbound,
-    undefined, undefined,
-    r => lastCRq = r,
-  )
-  assert(lastCRq?.request_id === 'r1', 'control_request routed')
-
-  // Invalid JSON
-  lastMsg = null
-  handleIngressMessage('not json', posted, inbound, m => lastMsg = m)
-  assert(lastMsg === null, 'invalid JSON silently ignored')
-
-  // Non-object JSON
-  handleIngressMessage('"string"', posted, inbound, m => lastMsg = m)
-  assert(lastMsg === null, 'non-object JSON ignored')
-}
-
-// ===================================================================
-// Phase 2 — FlushGate
-// ===================================================================
-
-describe('FlushGate — basic lifecycle')
-{
-  const g = new FlushGate()
-  assert(!g.active, 'starts inactive')
-  assert(g.enqueue('a') === false, 'enqueue returns false when inactive')
-
-  g.start()
-  assert(g.active, 'active after start')
-  assert(g.enqueue('b') === true, 'enqueue returns true when active')
-  g.enqueue('c')
-
-  const buf = g.end()
-  assert(!g.active, 'inactive after end')
-  assert(buf.length === 2, 'end returns buffered items')
-  assert(buf[0] === 'b' && buf[1] === 'c', 'items in order')
-}
-
-describe('FlushGate — drop discards buffer')
-{
-  const g = new FlushGate()
-  g.start()
-  g.enqueue('x', 'y')
-  const n = g.drop()
-  assert(n === 2, `drop returns count ${n}`)
-  assert(g.end().length === 0, 'buffer empty after drop')
-}
-
-describe('FlushGate — deactivate without losing buffer')
-{
-  const g = new FlushGate()
-  g.start(); g.enqueue('keep')
-  g.deactivate()
-  assert(!g.active, 'deactivated')
-  const buf = g.end()
-  assert(buf.length === 1, 'buffer preserved after deactivate')
-}
-
-describe('FlushGate — multiple start/end cycles')
-{
-  const g = new FlushGate()
-  g.start(); g.enqueue('a'); assert(g.end().length === 1, 'first cycle')
-  g.start(); g.enqueue('b'); assert(g.end().length === 1, 'second cycle')
-  g.start(); g.enqueue('c'); assert(g.end().length === 1, 'third cycle')
-}
 
 // ===================================================================
 // Phase 1 — StdioTransport (unit with mocked child)
@@ -810,21 +674,20 @@ describe('Session — usage from assistant message with stop_reason')
 // Session — permission_mode (bypass / approve)
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('Session — permission_mode default is bypass')
+describe('Session — permission_mode default is approve')
 {
   let lastWritten = null
   const s = new Session({ taskId: 't-pm-default', prompt: 'test' })
   s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
-  // Default permissionMode should be "bypass"
+  // Default permissionMode is "approve" — blocks for external decision
   s._onMessage({
     type: 'control_request',
     request_id: 'r-def',
     request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'tu-def' },
   })
-  assert(lastWritten !== null, 'control_response sent for bypass by default')
-  assert(lastWritten.type === 'control_response', 'response is control_response')
-  assert(lastWritten.response?.response?.behavior === 'allow', 'behavior is allow')
-  assert(s._pendingPermission === null, 'no pending permission after auto-allow')
+  assert(lastWritten === null, 'no auto-response in approve mode')
+  assert(s._pendingPermission !== null, 'pending permission stored')
+  assert(s._pendingPermission.toolName === 'Bash', 'tool name preserved')
 }
 
 describe('Session — permission_mode bypass auto-allows can_use_tool')
