@@ -22,11 +22,13 @@ export class Bridge {
    * @param {object} [opts]
    * @param {number} [opts.maxConcurrent] - Max parallel sessions (default 3)
    * @param {number} [opts.taskTimeoutMs] - Per-task timeout (0 = no timeout)
+   * @param {"bypass"|"approve"} [opts.permissionMode] - Default permission mode (default "bypass")
    * @param {string} [opts.cwd] - Default working directory
    */
   constructor(opts = {}) {
     this._maxConcurrent = opts.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
     this._taskTimeoutMs = opts.taskTimeoutMs ?? 0; // 0 = no timeout
+    this._permissionMode = opts.permissionMode ?? "bypass";
     this._cwd = opts.cwd || undefined;
 
     /** @type {Map<string, import("./session.mjs").Session>} */
@@ -54,7 +56,7 @@ export class Bridge {
    * Create a new task. Spawns a Claude process or queues if at capacity.
    * @param {string} prompt
    * @param {string} [taskId]
-   * @param {{ cwd?: string, sessionId?: string }} [opts]
+   * @param {{ cwd?: string, sessionId?: string, permissionMode?: "bypass"|"approve" }} [opts]
    * @returns {Promise<{task_id: string, status: string}>}
    */
   async createTask(prompt, taskId, opts = {}) {
@@ -297,6 +299,7 @@ export class Bridge {
       prompt,
       cwd: opts?.cwd || this._cwd,
       taskTimeoutMs: this._taskTimeoutMs,
+      permissionMode: opts?.permissionMode || this._permissionMode,
       onComplete: (s) => this._onSessionComplete(s),
       onError: (s, reason) => this._onSessionError(s, reason),
     });

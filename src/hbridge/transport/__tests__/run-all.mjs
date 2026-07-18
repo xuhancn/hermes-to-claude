@@ -807,6 +807,100 @@ describe('Session — usage from assistant message with stop_reason')
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Session — permission_mode (bypass / approve)
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Session — permission_mode default is bypass')
+{
+  let lastWritten = null
+  const s = new Session({ taskId: 't-pm-default', prompt: 'test' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+  // Default permissionMode should be "bypass"
+  s._onMessage({
+    type: 'control_request',
+    request_id: 'r-def',
+    request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'tu-def' },
+  })
+  assert(lastWritten !== null, 'control_response sent for bypass by default')
+  assert(lastWritten.type === 'control_response', 'response is control_response')
+  assert(lastWritten.response?.response?.behavior === 'allow', 'behavior is allow')
+  assert(s._pendingPermission === null, 'no pending permission after auto-allow')
+}
+
+describe('Session — permission_mode bypass auto-allows can_use_tool')
+{
+  let lastWritten = null
+  const s = new Session({ taskId: 't-pm-bypass', prompt: 'test', permissionMode: 'bypass' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+  s._onMessage({
+    type: 'control_request',
+    request_id: 'r-bypass',
+    request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'tu-bypass' },
+  })
+  assert(lastWritten !== null, 'control_response sent for bypass')
+  assert(lastWritten.type === 'control_response', 'response type is control_response')
+  assert(lastWritten.response.response.behavior === 'allow', 'behavior is allow')
+  assert(lastWritten.response.response.updatedInput?.command === 'ls', 'original input preserved')
+  assert(s._pendingPermission === null, 'no pending permission')
+}
+
+describe('Session — permission_mode approve blocks and emits permission_request')
+{
+  let lastWritten = null
+  const s = new Session({ taskId: 't-pm-approve', prompt: 'test', permissionMode: 'approve' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+
+  // Subscribe to capture SSE events
+  const events = []
+  s.subscribe({ write: d => events.push(d) })
+
+  s._onMessage({
+    type: 'control_request',
+    request_id: 'r-approve',
+    request: { subtype: 'can_use_tool', tool_name: 'Read', input: { path: '/tmp/x' }, tool_use_id: 'tu-approve' },
+  })
+
+  // Should NOT have auto-responded
+  assert(lastWritten === null, 'no control_response sent yet (blocked)')
+
+  // Should have pending permission
+  assert(s._pendingPermission !== null, 'pending permission set')
+  assert(s._pendingPermission.toolName === 'Read', 'tool name captured')
+  assert(s._pendingPermission.requestId === 'r-approve', 'request_id captured')
+  assert(s._pendingPermission.toolUseId === 'tu-approve', 'tool_use_id captured')
+
+  // Should have emitted permission_request SSE event
+  assert(events.some(e => e.includes('permission_request')), 'permission_request SSE event emitted')
+  assert(events.some(e => e.includes('Read')), 'tool name in SSE event')
+
+  // Now respond
+  const ok = s.respondPermission('allow')
+  assert(ok === true, 'respondPermission returns true')
+  assert(lastWritten !== null, 'control_response sent after respondPermission')
+  assert(lastWritten.response.response.behavior === 'allow', 'behavior is allow')
+  assert(s._pendingPermission === null, 'pending permission cleared')
+}
+
+describe('Session — permission_mode approve: respondPermission deny')
+{
+  let lastWritten = null
+  const s = new Session({ taskId: 't-pm-deny', prompt: 'test', permissionMode: 'approve' })
+  s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
+
+  s._onMessage({
+    type: 'control_request',
+    request_id: 'r-deny',
+    request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm -rf /' }, tool_use_id: 'tu-deny' },
+  })
+
+  assert(lastWritten === null, 'blocked before respondPermission')
+  const ok = s.respondPermission('deny', undefined, 'Not allowed')
+  assert(ok === true, 'respondPermission deny returns true')
+  assert(lastWritten.response.response.behavior === 'deny', 'behavior is deny')
+  assert(lastWritten.response.response.message === 'Not allowed', 'deny message preserved')
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Bridge pool tests (getTask/getTaskOutput)
 // ═══════════════════════════════════════════════════════════════════════
 

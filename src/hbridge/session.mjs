@@ -26,6 +26,7 @@ const CLAUDE_ARGS = [
 
 const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
 const DEFAULT_MAX_AUTO_RESPOND = 5;
+const DEFAULT_PERMISSION_MODE = "bypass"; // "bypass" | "approve"
 
 export class Session {
   /**
@@ -35,6 +36,7 @@ export class Session {
    * @param {string} [opts.cwd]
    * @param {number} [opts.taskTimeoutMs]
    * @param {number} [opts.maxAutoRespond]
+   * @param {"bypass"|"approve"} [opts.permissionMode]
    * @param {(session: Session) => void} [opts.onComplete]
    * @param {(session: Session, reason: string) => void} [opts.onError]
    */
@@ -50,6 +52,7 @@ export class Session {
     this._cwd = opts.cwd || undefined;
     this._taskTimeoutMs = opts.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
     this._maxAutoRespond = opts.maxAutoRespond ?? DEFAULT_MAX_AUTO_RESPOND;
+    this._permissionMode = opts.permissionMode ?? DEFAULT_PERMISSION_MODE;
     this._onComplete = opts.onComplete || null;
     this._onError = opts.onError || null;
 
@@ -272,8 +275,23 @@ export class Session {
       const subtype = /** @type {string|undefined} */ (msg.request?.subtype);
       process.stderr.write(`[session] ${this.taskId} control_request: ${subtype || '?'} (id=${reqId})\n`);
 
-      // can_use_tool: Hermes must decide (permission pipeline)
+      // can_use_tool: permission pipeline
       if (subtype === "can_use_tool") {
+        if (this._permissionMode === "bypass") {
+          // Auto-allow — transparent, no SSE event emitted
+          process.stderr.write(`[session] ${this.taskId} bypass permission: ${msg.request?.tool_name ?? ""}\n`);
+          this.transport?.write({
+            type: "control_response",
+            response_id: reqId,
+            response: {
+              subtype: "success",
+              response: { behavior: "allow", updatedInput: msg.request?.input ?? {} },
+            },
+          }).catch(() => {});
+          return;
+        }
+
+        // "approve" mode — block, emit permission_request, await external response
         this._pendingPermission = {
           requestId: reqId,
           toolName: /** @type {string} */ (msg.request?.tool_name ?? ""),

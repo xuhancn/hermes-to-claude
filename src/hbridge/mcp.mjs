@@ -216,9 +216,12 @@ function startInboxServer(expectedKey, manager) {
         req.on("data", (d) => (body += d));
         req.on("end", () => {
           try {
-            const prompt = JSON.parse(body).prompt || "";
+            const parsed = JSON.parse(body);
+            const prompt = parsed.prompt || "";
             const taskId = `task_${randomUUID()}`;
-            manager.createTask(prompt, taskId).catch(() => {});
+            const createOpts = {};
+            if (parsed.permission_mode) createOpts.permissionMode = parsed.permission_mode;
+            manager.createTask(prompt, taskId, createOpts).catch(() => {});
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ task_id: taskId, status: "created" }));
           } catch (e) {
