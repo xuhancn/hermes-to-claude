@@ -44,6 +44,8 @@ When `HBRIDGE_HOME=1`, the server auto-starts — no subcommand needed.
 
 All endpoints except `/health` require the key via HTTP Basic Auth.
 
+Created by **Xu Han** — [github.com/xuhancn](https://github.com/xuhancn)
+
 ## Document References
 
 | Document | Contents |
