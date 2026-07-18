@@ -5,9 +5,7 @@ import { isHome } from "./home.mjs";
 
 let taskCount = 0, startTime = Date.now();
 
-export function createServer(expectedKey, bridgeInput) {
-  /** @type {Bridge} */
-  const bridge = bridgeInput || new Bridge();
+export function createServer(expectedKey, bridge = new Bridge()) {
   return http((req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204);

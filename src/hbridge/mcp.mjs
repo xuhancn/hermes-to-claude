@@ -177,7 +177,7 @@ function handleMcp(msg, key, bridge) {
 
 let inboxServer = null;
 
-function startInboxServer(expectedKey, manager) {
+function startInboxServer(expectedKey, expectedBridge) {
   if (inboxServer && inboxServer.listening) return;
 
   const port = homePort(process.cwd());
@@ -221,7 +221,7 @@ function startInboxServer(expectedKey, manager) {
             const taskId = `task_${randomUUID()}`;
             const createOpts = {};
             if (parsed.permission_mode) createOpts.permissionMode = parsed.permission_mode;
-            manager.createTask(prompt, taskId, createOpts).catch(() => {});
+            expectedBridge.createTask(prompt, taskId, createOpts).catch(() => {});
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ task_id: taskId, status: "created" }));
           } catch (e) {
@@ -236,7 +236,7 @@ function startInboxServer(expectedKey, manager) {
         const taskId = new URL(`http://localhost${req.url}`).searchParams.get(
           "task_id"
         );
-        const result = manager.getTaskOutput(taskId);
+        const result = expectedBridge.getTaskOutput(taskId);
         if (!result) {
           res.writeHead(404);
           res.end(JSON.stringify({ error: "not_found" }));
