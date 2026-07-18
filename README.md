@@ -159,13 +159,63 @@ For quick development tasks, use `skip_permissions`. For production workloads th
 
 ```
 Hermes ──HTTP──▶ hbridge :<port> ──spawn──▶ Session (Claude Code)
-                      │                              │
-                      │  server.mjs (HTTP routing)    │  reads CLAUDE.md
-                      │  bridge.mjs (session pool)    │  loads skills
-                      │  session.mjs (per-task proc)  │  edits files
+  │                   │                              │
+  │  Control Layer    │  server.mjs (HTTP routing)    │  reads CLAUDE.md
+  │  (create/cancel/  │  bridge.mjs (session pool)    │  loads skills
+  │   output/poll)    │  session.mjs (per-task proc)  │  edits files
+  │                   │                              │
+  │  Transport Layer  │  StdioTransport               │
+  │  (SSE streaming)  │  (NDJSON stdin/stdout pipe)   │  Claude stdout
+  │                   │                              │
+  └─ poll or SSE ◀────┴─ task output (status/result) ─┘
 ```
 
-Hermes-Agent dispatches tasks; hbridge manages session lifecycle. Claude Code loads project-specific CLAUDE.md and skills from each working directory.
+Hermes-Agent dispatches tasks through two layers:
+
+- **Control Layer**: HTTP endpoints for task lifecycle — create, cancel, poll for results, health. This is what Sections 3.1–3.5 describe.
+- **Transport Layer**: Streaming, real-time progress, and persistent transcript via SSE and NDJSON. This is described below.
+
+Claude Code loads project-specific CLAUDE.md and skills from the working directory as a per-task child process. Each session is isolated.
+
+### Transport Layer
+
+Beyond polling `getTaskOutput`, Hermes-Agent can receive **real-time streaming** via Server-Sent Events (SSE) and read the raw Claude Code NDJSON transcript:
+
+#### SSE Streaming
+
+Subscribe to a task's output stream to receive events as they happen — no polling needed:
+
+```bash
+curl -N "http://<host>:<port>/v1/task/output/stream?task_id=task_xxx" \
+  -H "Authorization: Basic <base64(bridge:key)>"
+# event: chunk
+# data: {"task_id":"task_xxx","chunk":"Fixing the off-by-one...\n"}
+#
+# event: done
+# data: {"task_id":"task_xxx","status":"done","exitCode":0}
+```
+
+Event types pushed over SSE:
+
+| Event | Description |
+|-------|-------------|
+| `chunk` | Incremental text output from Claude Code |
+| `status` | Task status change (running → done / failed) |
+| `tool_progress` | Tool execution progress (tool name + elapsed time) |
+| `permission_request` | Claude requests tool approval (in `approve` mode) |
+
+#### NDJSON Transcript
+
+The raw Claude Code stdout is saved to `~/.hbridge_transcript.jsonl`. Each line is a complete NDJSON message from Claude Code — `assistant` messages, `stream_event` deltas, `tool_use` blocks, and `result` messages with usage data:
+
+```jsonl
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Fixing"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" the"}}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed the off-by-one error."}]}}
+{"type":"result","subtype":"success","result":"...","usage":{"input_tokens":120,"output_tokens":45}}
+```
+
+Hermes-Agent can tail this file for full Claude Code session history, or consume the SSE stream for live updates. The transport layer ensures no output is lost — even if the HTTP connection drops, the transcript file preserves every message.
 
 
 ### Document References
