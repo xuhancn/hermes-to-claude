@@ -29,7 +29,7 @@ function cleanup() {
 }
 
 /**
- * Build the status message the same way the FIXED hbridge_status will.
+ * Build the status message the same way the FIXED h2c_status will.
  * This is the contract the MCP handler must satisfy.
  */
 function buildStatus() {
@@ -53,7 +53,7 @@ assert(s1.running === false, "fresh state: running=false");
 assert(s1.port === 9190, "fresh state: default port=9190");
 
 const msg1 = buildStatus();
-assert(msg1 === "h2c stopped", "fresh state status: 'hbridge stopped'");
+assert(msg1 === "h2c stopped", "fresh state status: 'h2c stopped'");
 assert(!msg1.includes("Last:"), "fresh state status: no client IP");
 
 // ── 2. After markRunning → running ──────────────────────────────────
@@ -75,7 +75,7 @@ const s3 = readState();
 assert(s3.running === false, "after markStopped: running=false");
 
 const msg3 = buildStatus();
-assert(msg3 === "h2c stopped", "after markStopped status: 'hbridge stopped' (was bug: showed running)");
+assert(msg3 === "h2c stopped", "after markStopped status: 'h2c stopped' (was bug: showed running)");
 
 // ── 4. Running + client IP → IP shown in status ────────────────────
 markRunning(port);
