@@ -1,4 +1,4 @@
-// Test CLI command parsing + HBRIDGE_HOME mode blocking
+// Test CLI command parsing + H2C_HOME mode blocking
 // Run via: P=123 node --input-type=module -e "..." 2>&1
 // Or simpler: just test the logic directly
 
@@ -11,7 +11,7 @@ function assert(cond, msg) {
 // Simulate the combined arg + home-mode dispatch logic from cli.mjs
 function cli(args) {
   const cmd = args[0], sub = args[1], val = args[2];
-  const home = process.env.HBRIDGE_HOME == 1;
+  const home = process.env.H2C_HOME == 1;
 
   // Home mode: auto-start HTTP server directly (--stdio not needed)
   if (home) return "enable(auto)";
@@ -23,28 +23,28 @@ function cli(args) {
   return "unknown";
 }
 
-const saved = process.env.HBRIDGE_HOME;
+const saved = process.env.H2C_HOME;
 
 // ── Home mode auto-starts (no manual cmd needed) ──────────────────
-process.env.HBRIDGE_HOME = "1";
+process.env.H2C_HOME = "1";
 assert(cli(["--enable"]) === "enable(auto)",
-  "HBRIDGE_HOME=1 --enable -> enable(auto)");
+  "H2C_HOME=1 --enable -> enable(auto)");
 assert(cli(["--stdio"]) === "enable(auto)",
-  "HBRIDGE_HOME=1 --stdio -> enable(auto)");
+  "H2C_HOME=1 --stdio -> enable(auto)");
 
 // ── Home mode auto-starts even with any cmd ───────────────────────
 assert(cli(["--disable"]) === "enable(auto)",
-  "HBRIDGE_HOME=1 --disable -> enable(auto)");
+  "H2C_HOME=1 --disable -> enable(auto)");
 
 // ── Home mode auto-starts with no args ────────────────────────────
 assert(cli([]) === "enable(auto)",
-  "HBRIDGE_HOME=1 no args -> enable(auto)");
+  "H2C_HOME=1 no args -> enable(auto)");
 
 // ── Home mode unset → normal operation ────────────────────────
-delete process.env.HBRIDGE_HOME;
-assert(cli(["--enable"]) === "enable(undefined)", "no HBRIDGE_HOME --enable works");
-assert(cli(["--enable", "xu"]) === "enable(xu)", "no HBRIDGE_HOME --enable xu works");
-assert(cli(["--disable"]) === "disable", "no HBRIDGE_HOME --disable works");
+delete process.env.H2C_HOME;
+assert(cli(["--enable"]) === "enable(undefined)", "no H2C_HOME --enable works");
+assert(cli(["--enable", "xu"]) === "enable(xu)", "no H2C_HOME --enable xu works");
+assert(cli(["--disable"]) === "disable", "no H2C_HOME --disable works");
 
 // ── Existing arg-parsing tests still pass ─────────────────────
 assert(cli(["--status"]) === "status", "status");
@@ -54,7 +54,7 @@ assert(cli(["--user", "add", "han"]) === "user(add, han)", "user add");
 assert(cli(["--user", "list"]) === "user(list, undefined)", "user list");
 
 // Cleanup
-process.env.HBRIDGE_HOME = saved;
+process.env.H2C_HOME = saved;
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

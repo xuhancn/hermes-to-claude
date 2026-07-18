@@ -59,7 +59,7 @@ export class StdioTransport {
     // Transcript path — set null to disable raw NDJSON dump
     this._transcriptPath = opts.transcriptPath;
     if (this._transcriptPath === undefined) {
-      this._transcriptPath = join(homedir(), '.hbridge_transcript.jsonl');
+      this._transcriptPath = join(homedir(), '.h2c_transcript.jsonl');
     }
     // Transcript stream — opened in connect(), closed in close()
     this._transcriptStream = null;

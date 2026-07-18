@@ -91,7 +91,7 @@ assert(savedTask !== null, "survive-restart: task found after simulated restart"
 assert(savedTask.result === "world", "survive-restart: result preserved");
 
 // ── 9. File path is in home dir ──────────────────────────────
-assert(TASKS_FILE.includes(".hbridge_tasks.jsonl"), "file path contains .hbridge_tasks.jsonl");
+assert(TASKS_FILE.includes(".h2c_tasks.jsonl"), "file path contains .h2c_tasks.jsonl");
 
 // ── Cleanup ─────────────────────────────────────────────────
 if (existsSync(TASKS_FILE)) unlinkSync(TASKS_FILE);

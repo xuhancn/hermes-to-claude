@@ -12,14 +12,14 @@ const USER_SKILL_DIR = path.join(
   process.env.HOME || os.homedir(),
   ".claude",
   "skills",
-  "hbridge",
+  "h2c",
 );
 
 try {
   // ---- statusLine hook (default ON — attaches to user's existing bar) ----
   const STATUSBAR_PATH = path.join(__dirname, "..", "dist", "statusline.mjs");
   const cmd = `node ${STATUSBAR_PATH}`;
-  const USER_CMD_FILE = path.join(os.homedir(), ".hbridge_user_statusline_cmd");
+  const USER_CMD_FILE = path.join(os.homedir(), ".h2c_user_statusline_cmd");
 
   let settings = {};
   if (fs.existsSync(USER_SETTINGS)) {
@@ -35,19 +35,19 @@ try {
 
   fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
   fs.writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
-  console.log("✓ hbridge statusLine registered (attaches to existing bar)");
+  console.log("✓ h2c statusLine registered (attaches to existing bar)");
 
-  // ---- /hbridge slash command skill (global ~/.claude/skills/hbridge/) ----
-  const SKILL_SRC = path.join(__dirname, "..", ".claude", "skills", "hbridge", "SKILL.md");
+  // ---- /h2c slash command skill (global ~/.claude/skills/h2c/) ----
+  const SKILL_SRC = path.join(__dirname, "..", ".claude", "skills", "h2c", "SKILL.md");
   const SKILL_DST = path.join(USER_SKILL_DIR, "SKILL.md");
 
   if (fs.existsSync(SKILL_SRC)) {
     fs.mkdirSync(USER_SKILL_DIR, { recursive: true });
     fs.copyFileSync(SKILL_SRC, SKILL_DST);
-    console.log("✓ hbridge slash command installed (/hbridge)");
+    console.log("✓ h2c slash command installed (/h2c)");
   } else {
-    console.warn("⚠ hbridge skill file not found — skipping slash command install");
+    console.warn("⚠ h2c skill file not found — skipping slash command install");
   }
 } catch (e) {
-  console.error("⚠ Could not register hbridge in Claude Code config:", e.message);
+  console.error("⚠ Could not register h2c in Claude Code config:", e.message);
 }

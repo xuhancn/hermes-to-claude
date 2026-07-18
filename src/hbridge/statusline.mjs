@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * hbridge statusline — Claude Code statusLine hook
+ * h2c statusline — Claude Code statusLine hook
  *
  * Called periodically by Claude Code via statusLine.command config.
  * Outputs one line to stdout — the first line is displayed in the
@@ -15,8 +15,8 @@
  * holds a stale port from a different directory or session.
  *
  * Output examples:
- *   ⏹️ hbridge: off
- *   ▶️ hbridge: on | :9761 | hermes-claude-bridge
+ *   ⏹️ h2c: off
+ *   ▶️ h2c: on | :9761 | hermes-claude-bridge
  */
 
 import { createHash } from "crypto";
@@ -52,10 +52,10 @@ async function main() {
   const port = portFromCwd(process.cwd());
   const alive = await livenessCheck(port);
   const lastDir = process.cwd().split(/[/\\]/).filter(Boolean).pop() || process.cwd();
-  const hbStatus = alive ? `▶️ hbridge: on | :${port} | ${lastDir}` : `⏹️ hbridge: off`;
+  const hbStatus = alive ? `▶️ h2c: on | :${port} | ${lastDir}` : `⏹️ h2c: off`;
 
-  // If user has a saved custom statusLine command, run it and attach hbridge status
-  const userCmdFile = join(homedir(), ".hbridge_user_statusline_cmd");
+  // If user has a saved custom statusLine command, run it and attach h2c status
+  const userCmdFile = join(homedir(), ".h2c_user_statusline_cmd");
   let userPart = "";
   if (existsSync(userCmdFile)) {
     try {

@@ -4,7 +4,7 @@ import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
 
-const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
+const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 let server = null;
 let statusBarInterval = null;
 
@@ -22,14 +22,14 @@ async function cmd_enable() {
   const ips = getLocalIPs();
   const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
 
-  console.log("hbridge enabled");
+  console.log("h2c enabled");
   console.log("📂 " + cwd);
-  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
+  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + H2C_VERSION);
 
   server = createServer(key);
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
-      process.stderr.write(`Port ${port} already in use — hbridge may already be running\n`);
+      process.stderr.write(`Port ${port} already in use — h2c may already be running\n`);
     } else {
       process.stderr.write(`Server error: ${err.message}\n`);
     }
@@ -46,7 +46,7 @@ function cmd_disable() {
     server.close(() => {
       server = null;
       markStopped();
-      console.log("  hbridge: off");
+      console.log("  h2c: off");
       stopStatusBar(statusBarInterval);
       process.exit(0);
     });
@@ -54,7 +54,7 @@ function cmd_disable() {
     setTimeout(() => process.exit(0), 1000);
   } else {
     markStopped();
-    console.log("  hbridge: off");
+    console.log("  h2c: off");
     process.exit(0);
   }
 }
@@ -68,27 +68,27 @@ function cmd_status() {
   const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
   const running = state.running;
 
-  console.log(running ? "hbridge enabled" : "hbridge stopped");
+  console.log(running ? "h2c enabled" : "h2c stopped");
   console.log("📂 " + cwd);
-  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + HBRIDGE_VERSION);
+  console.log("🔑 " + ip + ":" + port + " | " + key + " | " + H2C_VERSION);
 }
 
 function showHelp() {
   console.log(`
-  hbridge — Hermes Bridge
+  h2c — Hermes Bridge
 
   COMMANDS:
-    hbridge --enable         Start bridge with deterministic key
-    hbridge --disable        Stop bridge
-    hbridge --status         Show status + last client connection
-    hbridge --help           Show this help
+    h2c --enable         Start bridge with deterministic key
+    h2c --disable        Stop bridge
+    h2c --status         Show status + last client connection
+    h2c --help           Show this help
 
-  Port is derived from the working directory; key is machine-global from ~/.hbridge_key.
-  Home mode (HBRIDGE_HOME=1) skips auth; remote mode enforces key.
+  Port is derived from the working directory; key is machine-global from ~/.h2c_key.
+  Home mode (H2C_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:
-    hbridge --enable         Enable with dir-derived key
-    hbridge --status         Show connected IP + last active time
+    h2c --enable         Enable with dir-derived key
+    h2c --status         Show connected IP + last active time
   `);
   process.exit(0);
 }
@@ -104,9 +104,9 @@ else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
-  console.log("hbridge — Hermes Bridge");
-  console.log("  hbridge --enable           Start bridge");
-  console.log("  hbridge --disable          Stop bridge");
-  console.log("  hbridge --status           Show status");
-  console.log("  hbridge --help             Show help");
+  console.log("h2c — Hermes Bridge");
+  console.log("  h2c --enable           Start bridge");
+  console.log("  h2c --disable          Stop bridge");
+  console.log("  h2c --status           Show status");
+  console.log("  h2c --help             Show help");
 }

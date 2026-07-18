@@ -143,7 +143,7 @@ export function createServer(expectedKey, bridge = new Bridge()) {
 export function startStatusBar(port) {
   function render() {
     const uptime = Math.floor((Date.now() - startTime) / 60000);
-    process.stdout.write(`\r  hbridge: on | port: ${port} | ${taskCount} tasks | ↑ ${uptime}min  `);
+    process.stdout.write(`\r  h2c: on | port: ${port} | ${taskCount} tasks | ↑ ${uptime}min  `);
   }
   render();
   return setInterval(render, 5000);

@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { execSync } from "child_process";
 import { homeKey } from "../src/hbridge/home.mjs";
 
-const KEY_FILE = join(homedir(), ".hbridge_key");
+const KEY_FILE = join(homedir(), ".h2c_key");
 let pass = 0, fail = 0;
 
 function assert(cond, msg) {
@@ -34,7 +34,7 @@ function restoreKeyFile(saved) {
 
 {
   const saved = saveKeyFile();
-  const KNOWN = "hb_UTTestKey123";
+  const KNOWN = "h2c_UTTestKey123";
   writeFileSync(KEY_FILE, KNOWN, "utf8");
 
   const result = homeKey(process.cwd());
@@ -50,7 +50,7 @@ function restoreKeyFile(saved) {
   writeFileSync(KEY_FILE, "", "utf8");
 
   const result = homeKey(process.cwd());
-  assert(result.startsWith("hb_"), `Test 2a: key starts with hb_ — got ${result}`);
+  assert(result.startsWith("h2c_"), `Test 2a: key starts with hb_ — got ${result}`);
   assert(result.length > 3, `Test 2b: key has content — length=${result.length}`);
 
   // File should now contain the new key
@@ -67,7 +67,7 @@ function restoreKeyFile(saved) {
   writeFileSync(KEY_FILE, "not_a_valid_key_12345", "utf8");
 
   const result = homeKey(process.cwd());
-  assert(result.startsWith("hb_"), `Test 3a: key starts with hb_ — got ${result}`);
+  assert(result.startsWith("h2c_"), `Test 3a: key starts with hb_ — got ${result}`);
   assert(result !== "not_a_valid_key_12345", "Test 3b: garbage not returned");
 
   // File should now contain the new valid key
@@ -81,7 +81,7 @@ function restoreKeyFile(saved) {
 
 {
   const saved = saveKeyFile();
-  const KNOWN = "hb_IdempotentTest";
+  const KNOWN = "h2c_IdempotentTest";
   writeFileSync(KEY_FILE, KNOWN, "utf8");
 
   const first = homeKey(process.cwd());
@@ -95,7 +95,7 @@ function restoreKeyFile(saved) {
 
 {
   const saved = saveKeyFile();
-  const KNOWN = "hb_SurviveNpmTest";
+  const KNOWN = "h2c_SurviveNpmTest";
   writeFileSync(KEY_FILE, KNOWN, "utf8");
 
   // Run the actual npm build + test pipeline as a subprocess

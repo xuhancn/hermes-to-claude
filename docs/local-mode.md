@@ -1,42 +1,42 @@
-# hbridge Home Local Mode
+# h2c Home Local Mode
 
-Zero-config local collaboration between Hermes and Claude (OOB — Out-Of-Box). Unlike remote mode (manual `/hbridge enable` + authentication required), local mode starts **automatically, with no auth, and lives as long as Claude does**.
+Zero-config local collaboration between Hermes and Claude (OOB — Out-Of-Box). Unlike remote mode (manual `/h2c enable` + authentication required), local mode starts **automatically, with no auth, and lives as long as Claude does**.
 
 ## Motivation
 
-A general-purpose AI agent (Hermes) cannot remember domain specifics — experience is locked in skill files. hbridge Home Local Mode lets Hermes focus on orchestration only, delegating skills, scripts, and workflows to Claude. Claude owns one task at a time with zero memory pollution.
+A general-purpose AI agent (Hermes) cannot remember domain specifics — experience is locked in skill files. h2c Home Local Mode lets Hermes focus on orchestration only, delegating skills, scripts, and workflows to Claude. Claude owns one task at a time with zero memory pollution.
 
 ```
-Hermes → HBRIDGE_HOME=1 → hbridge auto-starts → compute port from cwd → connect localhost → send task → read result
+Hermes → H2C_HOME=1 → h2c auto-starts → compute port from cwd → connect localhost → send task → read result
 Claude → read CLAUDE.md → load skill → execute → respond
 ```
 
 ## Trigger
 
-Hermes sets the environment variable `HBRIDGE_HOME=1` and hbridge picks it up automatically — zero user action. No MCP config changes, no Claude involvement needed.
+Hermes sets the environment variable `H2C_HOME=1` and h2c picks it up automatically — zero user action. No MCP config changes, no Claude involvement needed.
 
 ```bash
-HBRIDGE_HOME=1 node dist/hbridge.mjs
+H2C_HOME=1 node dist/h2c.mjs
 ```
 
-When running as a standalone CLI, hbridge auto-starts if no subcommand is given and `HBRIDGE_HOME=1`:
+When running as a standalone CLI, h2c auto-starts if no subcommand is given and `H2C_HOME=1`:
 
 ```bash
-HBRIDGE_HOME=1 node dist/hbridge.mjs
-# → hbridge enabled (auto-start)
+H2C_HOME=1 node dist/h2c.mjs
+# → h2c enabled (auto-start)
 ```
 
 ## Behavioral Differences
 
 | | Remote Mode | Home Mode |
 |------|-------------|-----------|
-| Startup | Manual `/hbridge enable` | **Auto-start** (calls `hbridge enable` internally) |
+| Startup | Manual `/h2c enable` | **Auto-start** (calls `h2c enable` internally) |
 | Auth | Basic Auth required (machine key) | **No auth** (localhost trust) |
 | Port | hash(cwd) → [9200, 9799] | **hash(cwd)** → [9200, 9799] |
 | Listen | All interfaces (0.0.0.0) | **127.0.0.1 only** |
 | Lifecycle | Manual `--disable` | **Auto-stop on process exit** (HTTP server lives in same Node process) |
 
-Both modes use the same machine-global key (stored in `~/.hbridge_key`); home mode simply skips the auth check.
+Both modes use the same machine-global key (stored in `~/.h2c_key`); home mode simply skips the auth check.
 
 ## Port Mapping
 
@@ -48,11 +48,11 @@ Each working directory gets a deterministic port, stable across runs and machine
 
 ## Implementation
 
-Implemented in `src/hbridge/home.mjs`:
+Implemented in `src/h2c/home.mjs`:
 
-1. `isHome()` — checks `HBRIDGE_HOME == 1` (strict)
+1. `isHome()` — checks `H2C_HOME == 1` (strict)
 2. `homePort(cwd)` — returns `9200 + MD5(cwd)[0:2] % 600` (range [9200, 9799])
-3. `homeKey()` — reads/generates machine-global key in `~/.hbridge_key`
+3. `homeKey()` — reads/generates machine-global key in `~/.h2c_key`
 
 Server behavior when home mode is active:
 - **HTTP server** (`server.mjs`): skips auth, listens on `127.0.0.1`
@@ -64,4 +64,4 @@ Identical to remote mode — only port derivation and auth differ.
 
 ## Status
 
-**Implemented and active.** First-class feature, not experimental. See `src/hbridge/home.mjs` for the implementation and `tests/test_home.mjs` for test coverage.
+**Implemented and active.** First-class feature, not experimental. See `src/h2c/home.mjs` for the implementation and `tests/test_home.mjs` for test coverage.

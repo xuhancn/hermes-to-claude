@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end integration test for hbridge.
+ * End-to-end integration test for h2c.
  *
  * Tests the full pipeline:
  *   Bridge API → createTask / cancelTask / getTaskOutput (via Session)
@@ -39,7 +39,7 @@ function mockChild() {
 }
 
 async function main() {
-  console.log('\n=== hbridge End-to-End Integration Test ===\n');
+  console.log('\n=== h2c End-to-End Integration Test ===\n');
 
   // ── Phase 1: Bridge + Session lifecycle ─────────────────────
   group('Phase 1: Bridge.createTask + getTaskOutput via Session');
@@ -86,7 +86,7 @@ async function main() {
   const { createServer: createHttpServer } = await imp(join(PROJECT_ROOT, 'src/hbridge/server.mjs'));
   const b3 = new Bridge({ maxConcurrent: 5 });
 
-  process.env.HBRIDGE_HOME = '1'; // skip auth
+  process.env.H2C_HOME = '1'; // skip auth
   const server = createHttpServer('test', b3);
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const port = /** @type {any} */ (server.address()).port;
