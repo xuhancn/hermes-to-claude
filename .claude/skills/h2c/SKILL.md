@@ -17,17 +17,17 @@ Usage:
 
 ## Instructions
 
-Parse the args to determine the subcommand. The args string contains space-separated tokens after `/h2c`.
+Parse the args to determine the subcommand. The args string contains space-separated tokens after `/h2c`. All commands run via direct Bash, **not** MCP tools.
 
 ### Subcommand mapping
 
-| Input | MCP tool call | Notes |
+| Input | Command | Notes |
 |---|---|---|
-| `enable` | `h2c_enable()` | Key from `~/.h2c_key` (random, machine-global) |
-| `disable` | `h2c_disable()` | |
-| `status` | `h2c_status()` | |
-| `status_bar on` | `h2c_status_bar({"action":"on"})` | Attach h2c to existing bar |
-| `status_bar off` | `h2c_status_bar({"action":"off"})` | Restore user's original bar |
+| `enable` | `node dist/hbridge.mjs --enable` | Start server, show persistent machine key |
+| `disable` | `node dist/hbridge.mjs --disable` | |
+| `status` | `node dist/hbridge.mjs --status` | |
+| `status_bar on` | See `/h2c help` | |
+| `status_bar off` | See `/h2c help` | |
 | `help` or no args | Show help text | |
 
 Port and key are derived from the working directory. Home mode (H2C_HOME=1) skips auth.
