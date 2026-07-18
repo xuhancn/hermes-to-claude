@@ -4,9 +4,9 @@
 
 ```
 📱 User ----HTTP----> 🤖 Hermes-Agent ----h2c----> 🏭 Claude Code (deploy role)
-                            ├───h2c───> 🔧 Claude Code (coding role)
-                            ├───h2c───> 🧪 Claude Code (testing role)
-                            └───h2c───> 🔬 Claude Code (building role)
+                            ├----h2c----> 🔧 Claude Code (coding role)
+                            ├----h2c----> 🧪 Claude Code (testing role)
+                            └----h2c----> 🔬 Claude Code (building role)
 ```
 
 ---
@@ -60,7 +60,14 @@ This starts the HTTP server. The port is derived from the working directory (see
 When Hermes-Agent runs on a server with no display, no manual command is needed. Export the **environment variable** before starting h2c:
 
 ```bash
-export H2C_HOME=1       # environment variable — auto-starts h2c
+# Linux / macOS
+H2C_HOME=1
+
+# Windows (Command Prompt)
+set H2C_HOME=1
+
+# Windows (PowerShell)
+$env:H2C_HOME = "1"
 ```
 
 With Home mode active, the server listens on `127.0.0.1` only. Authentication is **disabled** — safe because only local processes can reach it. Hermes-Agent connects without managing keys.
@@ -73,7 +80,7 @@ The port is **deterministic**: `MD5(cwd)` → first 2 bytes → `9200 + (value %
 - Claude reads its own CLAUDE.md, skills, and project files from that directory
 - Port = project — you always know which Claude you're talking to
 
-The auth key (`hb_` + 8 random base52 characters) is written to `~/.h2c_key` once and reused across all directories on the same machine. All HTTP endpoints (except `/health`) require HTTP Basic Auth with username `bridge` and the key as password.
+The auth key (`h2c_` + 8 random base52 characters) is written to `~/.h2c_key` once and reused across all directories on the same machine. All HTTP endpoints (except `/health`) require HTTP Basic Auth with username `bridge` and the key as password.
 
 ---
 
