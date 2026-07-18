@@ -24,7 +24,7 @@ const CLAUDE_ARGS = [
   "--dangerously-skip-permissions",
 ];
 
-const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min
+const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
 const DEFAULT_MAX_AUTO_RESPOND = 5;
 
 export class Session {
@@ -148,11 +148,13 @@ export class Session {
     this.transport.connect();
     this.status = "running";
 
-    // Start task timeout
-    this._timeoutTimer = setTimeout(() => {
-      process.stderr.write(`[session] ${this.taskId}: timeout after ${this._taskTimeoutMs / 1000}s\n`);
-      this._failTask("timeout");
-    }, this._taskTimeoutMs);
+    // Start task timeout (0 = no timeout)
+    if (this._taskTimeoutMs > 0) {
+      this._timeoutTimer = setTimeout(() => {
+        process.stderr.write(`[session] ${this.taskId}: timeout after ${this._taskTimeoutMs / 1000}s\n`);
+        this._failTask("timeout");
+      }, this._taskTimeoutMs);
+    }
 
     // Create promise that resolves on completion
     this._taskPromise = new Promise((resolve) => {
