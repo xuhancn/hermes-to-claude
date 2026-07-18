@@ -16,7 +16,7 @@
  *
  * Output examples:
  *   ⏹️ hbridge: off
- *   ▶️ hbridge: on | :9761
+ *   ▶️ hbridge: on | :9761 | hermes-claude-bridge
  */
 
 import { createHash } from "crypto";
@@ -51,7 +51,8 @@ function livenessCheck(port) {
 async function main() {
   const port = portFromCwd(process.cwd());
   const alive = await livenessCheck(port);
-  const hbStatus = alive ? `▶️ hbridge: on | :${port}` : `⏹️ hbridge: off`;
+  const lastDir = process.cwd().split(/[/\\]/).filter(Boolean).pop() || process.cwd();
+  const hbStatus = alive ? `▶️ hbridge: on | :${port} | ${lastDir}` : `⏹️ hbridge: off`;
 
   // If user has a saved custom statusLine command, run it and attach hbridge status
   const userCmdFile = join(homedir(), ".hbridge_user_statusline_cmd");
