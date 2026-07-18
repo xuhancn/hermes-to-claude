@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { startMcpServer } from "./mcp.mjs";
 import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
@@ -90,16 +89,12 @@ function showHelp() {
 const args = process.argv.slice(2);
 const cmd = args[0];
 
-// Home mode: auto-start HTTP server, block --stdio (not needed)
+// Home mode: auto-start HTTP server directly
 if (isHome()) {
   cmd_enable();
 } else if (cmd === "--enable") cmd_enable();
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
-else if (cmd === "--stdio") {
-  console.error("[hbridge] --stdio is deprecated -- use --enable for direct HTTP mode");
-  console.error("[hbridge] --stdio is internal for Claude Code MCP registration only");
-  startMcpServer(); }
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
 else {
   console.log("hbridge — Hermes Bridge");
