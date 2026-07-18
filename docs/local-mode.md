@@ -1,6 +1,6 @@
 # hbridge Home Local Mode
 
-Zero-config local collaboration between Hermes and Claude (OOB — Out-Of-Box). Unlike remote mode (manual `--enable` + authentication required), local mode starts **automatically, with no auth, and lives as long as Claude does**.
+Zero-config local collaboration between Hermes and Claude (OOB — Out-Of-Box). Unlike remote mode (manual `/hbridge enable` + authentication required), local mode starts **automatically, with no auth, and lives as long as Claude does**.
 
 ## Motivation
 
@@ -30,7 +30,7 @@ HBRIDGE_HOME=1 node dist/hbridge.mjs
 
 | | Remote Mode | Home Mode |
 |------|-------------|-----------|
-| Startup | Manual `--enable` or `/hbridge enable` | **Auto-start** (calls `--enable` internally) |
+| Startup | Manual `/hbridge enable` | **Auto-start** (calls `hbridge enable` internally) |
 | Auth | Basic Auth required (machine key) | **No auth** (localhost trust) |
 | Port | hash(cwd) → [9200, 9799] | **hash(cwd)** → [9200, 9799] |
 | Listen | All interfaces (0.0.0.0) | **127.0.0.1 only** |
