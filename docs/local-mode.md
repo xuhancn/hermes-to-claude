@@ -30,11 +30,11 @@ HBRIDGE_HOME=1 node dist/hbridge.mjs
 
 | | Remote Mode | Home Mode |
 |------|-------------|-----------|
-| Startup | Manual `--enable` or `/hbridge enable` | **Auto-start** with MCP or no-arg CLI |
+| Startup | Manual `--enable` or `/hbridge enable` | **Auto-start** (calls `--enable` internally) |
 | Auth | Basic Auth required (machine key) | **No auth** (localhost trust) |
 | Port | hash(cwd) → [9200, 9799] | **hash(cwd)** → [9200, 9799] |
 | Listen | All interfaces (0.0.0.0) | **127.0.0.1 only** |
-| Lifecycle | Manual `--disable` | ****Auto-stop on MCP process exit** (HTTP server lives in same process)** |
+| Lifecycle | Manual `--disable` | **Auto-stop on process exit** (HTTP server lives in same Node process) |
 
 Both modes use the same machine-global key (stored in `~/.hbridge_key`); home mode simply skips the auth check.
 
@@ -56,8 +56,7 @@ Implemented in `src/hbridge/home.mjs`:
 
 Server behavior when home mode is active:
 - **HTTP server** (`server.mjs`): skips auth, listens on `127.0.0.1`
-- **MCP server** (`mcp.mjs`): auto-starts the HTTP inbox without needing `hbridge_enable`
-- **CLI** (`cli.mjs`): blocks manual `--enable`/`--disable`, auto-starts when no subcommand given
+- **CLI** (`cli.mjs`): auto-starts HTTP server directly (no MCP layer)
 
 ## API
 

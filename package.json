@@ -1,31 +1,29 @@
 {
   "name": "hermes-claude-bridge",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "Minimal stdio bridge between Hermes Agent and Claude Code",
-  "main": "src/bridge.js",
-  "scripts": {
-    "start": "node src/bridge.js",
-    "test": "echo 'ok'",
-    "build": "node build.mjs",
-    "postinstall": "node scripts/setup-mcp.cjs",
-    "prepublishOnly": "npm run build",
-    "preinstall": "npm run build"
+  "description": "Local HTTP bridge connecting Hermes Agent to Claude Code — no Pro/Max subscription required",
+  "license": "MIT",
+  "repository": "github:xuhancn/hermes-claude-bridge",
+  "bin": {
+    "hbridge": "dist/hbridge.mjs"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.111.0",
-    "axios": "^1.18.1",
-    "chalk": "^5.6.2",
-    "get-east-asian-width": "^1.6.0",
-    "lodash-es": "^4.18.1",
-    "qrcode": "^1.5.4",
-    "zod": "^4.0.0"
+  "files": [
+    "dist/",
+    "scripts/",
+    "docs/",
+    "DESIGN.md",
+    "LICENSE",
+    "README.md",
+    "build.mjs"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "npm run build",
+    "postinstall": "node scripts/setup-mcp.cjs",
+    "test": "node src/hbridge/transport/__tests__/run-all.mjs && node tests/test_bridge.mjs && node tests/test_e2e.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
-  },
-  "bin": {
-    "hbridge": "dist/hbridge.mjs"
   }
 }
