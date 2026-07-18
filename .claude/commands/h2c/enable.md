@@ -1,5 +1,7 @@
 # /h2c enable
 
+> Run h2c enable directly — do NOT read source code or search files. Just execute the command and report the output.
+
 Start the h2c server. The access key is derived deterministically from the working directory. In home mode (H2C_HOME=1), the server auto-starts without `--enable` and no authentication is required.
 
 ## Usage
