@@ -810,12 +810,12 @@ describe('Session — usage from assistant message with stop_reason')
 // Session — permission_mode (bypass / approve)
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('Session — permission_mode default is bypass')
+describe('Session — permission_mode bypass (explicit) auto-allows can_use_tool')
 {
   let lastWritten = null
-  const s = new Session({ taskId: 't-pm-default', prompt: 'test' })
+  const s = new Session({ taskId: 't-pm-default', prompt: 'test', permissionMode: 'bypass' })
   s.transport = { write: async (msg) => { lastWritten = msg }, close: () => {} }
-  // Default permissionMode should be "bypass"
+  // Explicit bypass mode: should auto-allow can_use_tool
   s._onMessage({
     type: 'control_request',
     request_id: 'r-def',
