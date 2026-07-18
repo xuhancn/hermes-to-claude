@@ -21,7 +21,7 @@ const CLAUDE_ARGS = [
   "--input-format", "stream-json",
   "--output-format", "stream-json",
   "--verbose",
-  "--dangerously-skip-permissions",
+  // "--dangerously-skip-permissions",   // Hermes controls permissions via Pipeline
 ];
 
 const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
@@ -71,6 +71,10 @@ export class Session {
 
     // Multi-turn auto-respond
     this._autoRespondCount = 0;
+
+    // Permission pipeline
+    /** @type {{ requestId: string, toolName: string, input: object, toolUseId: string, timestamp: number }|null} */
+    this._pendingPermission = null;
 
     // Timeout
     this._timeoutTimer = null;
@@ -201,6 +205,36 @@ export class Session {
     return true;
   }
 
+  /**
+   * Respond to a pending permission request (can_use_tool).
+   * @param {"allow"|"deny"} behavior
+   * @param {object} [updatedInput] - Modified tool input for "allow"
+   * @param {string} [message] - Denial reason for "deny"
+   * @returns {boolean} true if a pending request was responded to
+   */
+  respondPermission(behavior, updatedInput, message) {
+    if (!this._pendingPermission) return false;
+    const req = this._pendingPermission;
+    this._pendingPermission = null;
+
+    const payload = behavior === "allow"
+      ? { behavior: "allow", updatedInput: updatedInput || req.input }
+      : { behavior: "deny", message: message || "Permission denied by Hermes" };
+
+    process.stderr.write(`[session] ${this.taskId} permission: ${behavior} for ${req.toolName}\n`);
+    this.transport?.write({
+      type: "control_response",
+      response_id: req.requestId,
+      response: { subtype: "success", response: payload },
+    }).catch(() => {});
+    return true;
+  }
+
+  /** @returns {object|null} The pending permission request, if any */
+  getPendingPermission() {
+    return this._pendingPermission;
+  }
+
   // ── SSE subscribers ─────────────────────────────────────────────────
 
   /** @param {{ write: (data: string) => void }} subscriber */
@@ -232,11 +266,34 @@ export class Session {
     // ── system/init ────────────────────────────────────────────────
     if (msg.type === "system" && msg.subtype === "init") return;
 
-    // ── control_request: auto-respond ──────────────────────────────
+    // ── control_request: lifecycle handshake or tool permission ─────
     if (msg.type === "control_request") {
       const reqId = /** @type {string} */ (msg.request_id ?? '');
       const subtype = /** @type {string|undefined} */ (msg.request?.subtype);
       process.stderr.write(`[session] ${this.taskId} control_request: ${subtype || '?'} (id=${reqId})\n`);
+
+      // can_use_tool: Hermes must decide (permission pipeline)
+      if (subtype === "can_use_tool") {
+        this._pendingPermission = {
+          requestId: reqId,
+          toolName: /** @type {string} */ (msg.request?.tool_name ?? ""),
+          input: msg.request?.input ?? {},
+          toolUseId: /** @type {string} */ (msg.request?.tool_use_id ?? ""),
+          timestamp: Date.now(),
+        };
+        process.stderr.write(`[session] ${this.taskId} awaiting permission: ${this._pendingPermission.toolName}\n`);
+        this._emitTaskEvent("permission_request", {
+          request_id: reqId,
+          task_id: this.taskId,
+          tool_name: this._pendingPermission.toolName,
+          input: this._pendingPermission.input,
+          tool_use_id: this._pendingPermission.toolUseId,
+        });
+        // Block until respondPermission() is called (or timeout handled externally)
+        return;
+      }
+
+      // Other control requests (initialize, interrupt, etc.): auto-respond
       this.transport?.write({
         type: "control_response",
         response_id: reqId,

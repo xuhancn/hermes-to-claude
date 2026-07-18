@@ -257,6 +257,31 @@ export class Bridge {
     return this._pendingQueue.length;
   }
 
+  /**
+   * Respond to a pending permission request for a task.
+   * @param {string} taskId
+   * @param {"allow"|"deny"} behavior
+   * @param {object} [updatedInput]
+   * @param {string} [message]
+   * @returns {boolean}
+   */
+  respondPermission(taskId, behavior, updatedInput, message) {
+    const session = this._sessions.get(taskId);
+    if (!session) return false;
+    return session.respondPermission(behavior, updatedInput, message);
+  }
+
+  /**
+   * Get pending permission request for a task.
+   * @param {string} taskId
+   * @returns {object|null}
+   */
+  getPendingPermission(taskId) {
+    const session = this._sessions.get(taskId);
+    if (!session) return null;
+    return session.getPendingPermission();
+  }
+
   // ── Internal ─────────────────────────────────────────────────────────
 
   /**

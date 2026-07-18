@@ -100,6 +100,18 @@ export function createServer(expectedKey, bridgeInput) {
             const ok = bridge.cancelTask(taskId, cancelOpts);
             result = ok ? { status: "cancelled", task_id: taskId } : { error: "not_found" };
           }
+        } else if (endpoint === "task" && action === "permission" && isPost) {
+          const taskId = payload.task_id;
+          if (!taskId || !payload.behavior) {
+            status = 400;
+            result = { error: "task_id and behavior required" };
+          } else if (!["allow", "deny"].includes(payload.behavior)) {
+            status = 400;
+            result = { error: 'behavior must be "allow" or "deny"' };
+          } else {
+            const ok = bridge.respondPermission(taskId, payload.behavior, payload.updatedInput, payload.message);
+            result = ok ? { status: "responded", task_id: taskId } : { error: "no_pending_request" };
+          }
         } else if (endpoint === "task" && action === "output") {
           const taskId = new URL(`http://localhost${req.url}`).searchParams.get("task_id");
           result = bridge.getTaskOutput(taskId) || { error: "not_found" };
