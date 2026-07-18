@@ -1,4 +1,4 @@
-# H-Bridge (hbridge) Design
+# H-Bridge (h2c) Design
 
 Hermes Bridge — local HTTP bridge from Hermes Agent to Claude Code.
 
@@ -6,11 +6,11 @@ Hermes Bridge — local HTTP bridge from Hermes Agent to Claude Code.
 
 ```
 npm install
-  ├─ preinstall: build → dist/hbridge.mjs + dist/statusline.mjs
+  ├─ preinstall: build → dist/h2c.mjs + dist/statusline.mjs
   ├─ install: npm deps
   └─ postinstall: register statusLine + skill in ~/.claude configs
 
-/hbridge enable
+/h2c enable
   └─ HTTP server on homePort(cwd)
        ├─ GET  /health                   → {"status":"ok"}
        ├─ POST /v1/task/create            → Bridge.createTask(prompt)
@@ -98,7 +98,7 @@ data: {"type":"done","exitCode":0}
 ### Task Lifecycle Diagram
 
 ```
-Hermes                          hbridge:<port>                    Session (Claude Code)
+Hermes                          h2c:<port>                    Session (Claude Code)
   │                                │                                │
   │  POST /v1/task/create          │                                │
   │  {"prompt":"fix bug"}          │                                │
@@ -153,21 +153,21 @@ Hermes                          hbridge:<port>                    Session (Claud
 
 **Key is machine-global**, **port is per-directory**. This follows Claude Code's working-directory-centric model.
 
-Claude Code reads its context — `CLAUDE.md`, project skills, `.claude/settings.json` — from the **current working directory**. Each project has its own conventions, its own skills, its own CLAUDE.md. To serve the right context, hbridge must spawn Claude Code in the right directory.
+Claude Code reads its context — `CLAUDE.md`, project skills, `.claude/settings.json` — from the **current working directory**. Each project has its own conventions, its own skills, its own CLAUDE.md. To serve the right context, h2c must spawn Claude Code in the right directory.
 
 ```
-/project-a/CLAUDE.md  →  hbridge :9200  →  Claude Code (cwd=/project-a)
-/project-b/CLAUDE.md  →  hbridge :9201  →  Claude Code (cwd=/project-b)
+/project-a/CLAUDE.md  →  h2c :9200  →  Claude Code (cwd=/project-a)
+/project-b/CLAUDE.md  →  h2c :9201  →  Claude Code (cwd=/project-b)
 ```
 
 **Port per directory** (`9200 + MD5(cwd) % 600`) means:
 - Each project gets a stable, predictable port
-- You can run hbridge for multiple projects on the same machine without conflict
+- You can run h2c for multiple projects on the same machine without conflict
 - The port is deterministic — Hermes computes it from the directory path without asking the server
 
 **Key per machine** means:
 - Hermes only needs one credential per machine, not one per project
-- The key is random, generated once, persisted in `~/.hbridge_key`
+- The key is random, generated once, persisted in `~/.h2c_key`
 - Same auth works across all directories on the same host
 
 Key format: `hb_` + 8 base52 chars (≈ 45 bits entropy, `crypto.randomBytes(8)`, stored once).
@@ -175,19 +175,19 @@ Key format: `hb_` + 8 base52 chars (≈ 45 bits entropy, `crypto.randomBytes(8)`
 ## Key & Port Derivation
 
 - **Port**: `9200 + (MD5(cwd)[0:2] % 600)` — range [9200, 9799], stable per directory
-- **Key**: `hb_` + 8 random base52 characters — generated once, stored in `~/.hbridge_key`. Same for all directories on one machine.
+- **Key**: `hb_` + 8 random base52 characters — generated once, stored in `~/.h2c_key`. Same for all directories on one machine.
 
 ## Task Persistence
 
-Completed tasks are saved to `~/.hbridge_tasks.jsonl` (JSONL, append-only, max 2000 entries). On server restart, tasks are loaded into memory. `getTaskOutput` checks session → memory cache → disk.
+Completed tasks are saved to `~/.h2c_tasks.jsonl` (JSONL, append-only, max 2000 entries). On server restart, tasks are loaded into memory. `getTaskOutput` checks session → memory cache → disk.
 
 ## Files
 
 ### Runtime (gitignored)
 | File | Purpose |
 |------|---------|
-| `~/.hbridge_state.json` | running/stopped flag + port + lastClientIP/lastActiveAt |
-| `~/.hbridge_tasks.jsonl` | Completed task records (JSONL, survive restart) |
+| `~/.h2c_state.json` | running/stopped flag + port + lastClientIP/lastActiveAt |
+| `~/.h2c_tasks.jsonl` | Completed task records (JSONL, survive restart) |
 
 ### Config (written by postinstall)
 | File | Purpose |
@@ -199,8 +199,8 @@ Completed tasks are saved to `~/.hbridge_tasks.jsonl` (JSONL, append-only, max 2
 Claude Code polls ~3-5s:
 
 ```
-▶️ hbridge: on | :<port>
-⏹️ hbridge: off
+▶️ h2c: on | :<port>
+⏹️ h2c: off
 ```
 
 Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file dependency.
@@ -212,7 +212,7 @@ Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file de
   - Old: `createTask` polled `setInterval` until previous task finished
   - New: Session pool with promise queue — no busy-polling
 - **Task timeout kills queue** ✅ Fixed (see #52)
-- **Persistence**: Completed tasks saved to `~/.hbridge_tasks.jsonl`, survive restart
+- **Persistence**: Completed tasks saved to `~/.h2c_tasks.jsonl`, survive restart
 - **Session class**: One Claude Code child process per task
 - **Parallelism**: Up to 3 concurrent tasks (configurable via `maxConcurrent`)
 
@@ -221,9 +221,9 @@ Liveness is determined by polling `127.0.0.1:<port>/health` — no state-file de
 - Timeout is now opt-in: pass `taskTimeoutMs` to Bridge/Session constructor
 
 ### #53 — Home mode direct enable
-- Home mode (`HBRIDGE_HOME=1`) now calls `cmd_enable()` directly
+- Home mode (`H2C_HOME=1`) now calls `cmd_enable()` directly
 - No longer goes through `--stdio` MCP layer
-- `--stdio` removed — hbridge is HTTP-only
+- `--stdio` removed — h2c is HTTP-only
 
 ### #54+ — Permission pipeline
 - `--dangerously-skip-permissions` replaced by Hermes-controlled permission pipeline

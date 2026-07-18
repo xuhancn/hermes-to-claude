@@ -58,9 +58,9 @@ async function main() {
   const out = runFrom(tmpDir);
   assert(out.includes("off"), `no server on port ${tmpPort} -> off`);
 
-  // 5. Output format: emoji prefix + "hbridge: off"
+  // 5. Output format: emoji prefix + "h2c: off"
   assert(out.startsWith("⏹️ ") || out.startsWith("▶️ "), "starts with emoji indicator");
-  assert(out.includes("hbridge:"), "contains hbridge:");
+  assert(out.includes("h2c:"), "contains h2c:");
 
   // 6. No state.json dependency — correct "off" without any state file
   assert(out.replace(/^[^h]*/, "").includes("off"), "no state file needed");

@@ -7,7 +7,7 @@ import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
 import { createServer } from "./server.mjs";
 
-const HBRIDGE_VERSION = globalThis.HBRIDGE_VERSION || "v0.0.0-dev";
+const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 
 function getLocalIPs() {
   const ips = [];
@@ -23,9 +23,9 @@ function getLocalIPs() {
 // ─── Paths for status bar toggle ────────────────────────────────────────
 
 const distDir = dirname(fileURLToPath(import.meta.url));
-const HBRIDGE_STATUSLINE_CMD = `node ${join(distDir, "statusline.mjs")}`;
+const H2C_STATUSLINE_CMD = `node ${join(distDir, "statusline.mjs")}`;
 const USER_SETTINGS = join(homedir(), ".claude", "settings.json");
-const USER_CMD_FILE = join(homedir(), ".hbridge_user_statusline_cmd");
+const USER_CMD_FILE = join(homedir(), ".h2c_user_statusline_cmd");
 
 // ─── MCP server ─────────────────────────────────────────────────────────
 
@@ -44,21 +44,21 @@ export function startMcpServer() {
 
   // Global crash protection — keep MCP alive even if something slips through
   process.on("uncaughtException", (err) => {
-    process.stderr.write(`[hbridge] UNCAUGHT: ${err.message}\n`);
+    process.stderr.write(`[h2c] UNCAUGHT: ${err.message}\n`);
   });
   process.on("unhandledRejection", (err) => {
-    process.stderr.write(`[hbridge] UNHANDLED: ${err}\n`);
+    process.stderr.write(`[h2c] UNHANDLED: ${err}\n`);
   });
 
   const key = homeKey(process.cwd());
   mcpBridge = new Bridge();
 
   // Home Mode — auto-start HTTP server (no enable needed)
-  if (process.env.HBRIDGE_HOME === "1") {
+  if (process.env.H2C_HOME === "1") {
     const port = homePort(process.cwd());
     httpServer = createServer(key, mcpBridge);
     httpServer.on("error", (err) => {
-      process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
+      process.stderr.write(`[h2c] HTTP server error: ${err.message}\n`);
       httpServer = null;
     });
     httpServer.listen(port);
@@ -101,7 +101,7 @@ function handleMcp(msg, key) {
       result: {
         protocolVersion: "2024-11-05",
         capabilities: { tools: { listChanged: true } },
-        serverInfo: { name: "hbridge", version: "1.0.0" },
+        serverInfo: { name: "h2c", version: "1.0.0" },
       },
     });
   } else if (method === "tools/list") {
@@ -110,13 +110,13 @@ function handleMcp(msg, key) {
     try {
       const { name } = params;
     let t = "";
-    if (name === "hbridge_enable") {
+    if (name === "h2c_enable") {
       const port = homePort(process.cwd());
       const k = homeKey(process.cwd());
       if (!httpServer) {
         httpServer = createServer(k, mcpBridge);
         httpServer.on("error", (err) => {
-          process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
+          process.stderr.write(`[h2c] HTTP server error: ${err.message}\n`);
           httpServer = null;
         });
         httpServer.listen(port);
@@ -124,35 +124,35 @@ function handleMcp(msg, key) {
       markRunning(port);
       const ips = getLocalIPs();
       const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
-      t = `hbridge enabled
+      t = `h2c enabled
 📂 ${process.cwd()}
-🔑 ${ip}:${port} | ${k} | ${HBRIDGE_VERSION}`;
-    } else if (name === "hbridge_disable") {
+🔑 ${ip}:${port} | ${k} | ${H2C_VERSION}`;
+    } else if (name === "h2c_disable") {
       if (httpServer) {
         const srv = httpServer;
         httpServer = null;
         srv.close((err) => {
-          if (err) process.stderr.write(`[hbridge] close error: ${err.message}\n`);
+          if (err) process.stderr.write(`[h2c] close error: ${err.message}\n`);
         });
       }
       markStopped();
       t = "disabled";
-    } else if (name === "hbridge_status") {
+    } else if (name === "h2c_status") {
       const state = readState();
       if (!state.running) {
-        t = "hbridge stopped";
+        t = "h2c stopped";
       } else {
         const port = state.port || homePort(process.cwd());
         const ips2 = getLocalIPs();
         const ip2 = isHome() ? "127.0.0.1" : (ips2[0] || "127.0.0.1");
-        t = `hbridge running on :${port}`;
+        t = `h2c running on :${port}`;
         t += `\n📂 ${process.cwd()}`;
         t += `\n🔑 ${ip2}:${port}`;
         if (state.lastClientIP) {
           t += `\nLast client: ${state.lastClientIP} at ${new Date(state.lastActiveAt).toLocaleString()}`;
         }
       }
-    } else if (name === "hbridge_status_bar") {
+    } else if (name === "h2c_status_bar") {
       const action = params?.arguments?.action;
       if (!action || !["on", "off"].includes(action)) {
         throw new Error('action must be "on" or "off"');
@@ -165,13 +165,13 @@ function handleMcp(msg, key) {
 
       if (action === "on") {
         const currentCmd = settings.statusLine?.command || "";
-        // Save user's command (unless it's already hbridge's wrapper)
+        // Save user's command (unless it's already h2c's wrapper)
         if (currentCmd && !currentCmd.includes("statusline.mjs")) {
           mkdirSync(dirname(USER_CMD_FILE), { recursive: true });
           writeFileSync(USER_CMD_FILE, currentCmd, "utf8");
         }
-        settings.statusLine = { type: "command", command: HBRIDGE_STATUSLINE_CMD };
-        t = "hbridge status bar ON — attached to your status bar";
+        settings.statusLine = { type: "command", command: H2C_STATUSLINE_CMD };
+        t = "h2c status bar ON — attached to your status bar";
       } else {
         // Restore user's original command
         if (existsSync(USER_CMD_FILE)) {
@@ -185,7 +185,7 @@ function handleMcp(msg, key) {
         } else {
           delete settings.statusLine;
         }
-        t = "hbridge status bar OFF";
+        t = "h2c status bar OFF";
       }
 
       mkdirSync(dirname(USER_SETTINGS), { recursive: true });
@@ -200,7 +200,7 @@ function handleMcp(msg, key) {
       respond({
         jsonrpc: "2.0",
         id,
-        error: { code: -32603, message: `hbridge error: ${e.message}` },
+        error: { code: -32603, message: `h2c error: ${e.message}` },
       });
     }
   }
@@ -215,26 +215,26 @@ let httpServer = null;
 
 const TOOLS = [
   {
-    name: "hbridge_enable",
-    description: "Start hbridge server. Always display the full output: cwd, IP, port, key, and version.",
+    name: "h2c_enable",
+    description: "Start h2c server. Always display the full output: cwd, IP, port, key, and version.",
     inputSchema: {
       type: "object",
       properties: {},
     },
   },
   {
-    name: "hbridge_disable",
-    description: "Stop hbridge server",
+    name: "h2c_disable",
+    description: "Stop h2c server",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hbridge_status",
-    description: "Show hbridge server status. Display: port, cwd, IP, and last client.",
+    name: "h2c_status",
+    description: "Show h2c server status. Display: port, cwd, IP, and last client.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hbridge_status_bar",
-    description: "Show/hide hbridge status in Claude Code status bar (attaches to your existing bar)",
+    name: "h2c_status_bar",
+    description: "Show/hide h2c status in Claude Code status bar (attaches to your existing bar)",
     inputSchema: {
       type: "object",
       properties: {

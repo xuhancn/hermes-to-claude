@@ -1,5 +1,5 @@
 /**
- * Task persistence — saves completed tasks to ~/.hbridge_tasks.jsonl
+ * Task persistence — saves completed tasks to ~/.h2c_tasks.jsonl
  * for survive-restart. getTaskOutput checks disk if not in memory.
  *
  * Format: JSONL, one JSON object per line:
@@ -13,7 +13,7 @@ import { readFileSync, appendFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
-const TASKS_FILE = join(homedir(), ".hbridge_tasks.jsonl");
+const TASKS_FILE = join(homedir(), ".h2c_tasks.jsonl");
 
 /** @type {number} Maximum persisted tasks before trimming. */
 const MAX_TASKS = 2000;

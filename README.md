@@ -1,17 +1,17 @@
-# Hermes-Claude-Bridge (hbridge)
+# Hermes-Claude-Bridge (h2c)
 
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
 ```
-📱 User ----HTTP----> 🤖 Hermes-Agent ----hbridge----> 🏭 Claude Code (deploy role)
-                            ├───hbridge───> 🔧 Claude Code (coding role)
-                            ├───hbridge───> 🧪 Claude Code (testing role)
-                            └───hbridge───> 🔬 Claude Code (building role)
+📱 User ----HTTP----> 🤖 Hermes-Agent ----h2c----> 🏭 Claude Code (deploy role)
+                            ├───h2c───> 🔧 Claude Code (coding role)
+                            ├───h2c───> 🧪 Claude Code (testing role)
+                            └───h2c───> 🔬 Claude Code (building role)
 ```
 
 ---
 
-## 1. hbridge Advantages
+## 1. h2c Advantages
 
 - **No Pro/Max required** — works with any Claude Code via stdio; no Anthropic subscription needed.
 - **One agent, many Claudes** — one Hermes-Agent routes tasks to multiple Claude Code instances, each in its own project directory with its own CLAUDE.md and skills.
@@ -25,7 +25,7 @@
 
 ### Prepare
 
-hbridge requires **Node.js ≥ 20**. Install it for your platform:
+h2c requires **Node.js ≥ 20**. Install it for your platform:
 
 | Platform | Command |
 |----------|---------|
@@ -36,31 +36,31 @@ hbridge requires **Node.js ≥ 20**. Install it for your platform:
 ### Install
 
 ```bash
-git clone https://github.com/xuhancn/hermes-claude-connector.git
+git clone https://github.com/xuhancn/hermes-to-claude.git
 cd hermes-claude-bridge
 npm install && npm run build
 ```
 
 ### Start in Claude Code
 
-After installation, enable hbridge from inside Claude Code:
+After installation, enable h2c from inside Claude Code:
 
 ```
-/hbridge enable
+/h2c enable
 ```
 
 This starts the HTTP server. The port is derived from the working directory (see Authentication and Port below). Check status at any time:
 
 ```
-/hbridge status
+/h2c status
 ```
 
 ### Home Mode — For Headless Machines
 
-When Hermes-Agent runs on a server with no display, no manual command is needed. Export the **environment variable** before starting hbridge:
+When Hermes-Agent runs on a server with no display, no manual command is needed. Export the **environment variable** before starting h2c:
 
 ```bash
-export HBRIDGE_HOME=1       # environment variable — auto-starts hbridge
+export H2C_HOME=1       # environment variable — auto-starts h2c
 ```
 
 With Home mode active, the server listens on `127.0.0.1` only. Authentication is **disabled** — safe because only local processes can reach it. Hermes-Agent connects without managing keys.
@@ -73,17 +73,17 @@ The port is **deterministic**: `MD5(cwd)` → first 2 bytes → `9200 + (value %
 - Claude reads its own CLAUDE.md, skills, and project files from that directory
 - Port = project — you always know which Claude you're talking to
 
-The auth key (`hb_` + 8 random base52 characters) is written to `~/.hbridge_key` once and reused across all directories on the same machine. All HTTP endpoints (except `/health`) require HTTP Basic Auth with username `bridge` and the key as password.
+The auth key (`hb_` + 8 random base52 characters) is written to `~/.h2c_key` once and reused across all directories on the same machine. All HTTP endpoints (except `/health`) require HTTP Basic Auth with username `bridge` and the key as password.
 
 ---
 
 ## 3. For Hermes-Agent
 
-Hermes-Agent discovers and controls hbridge via HTTP. Here is the complete API.
+Hermes-Agent discovers and controls h2c via HTTP. Here is the complete API.
 
 ### Security
 
-Like Claude Code CLI, hbridge requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads. Hermes-Agent must handle the same authentication and permission flow that human users would, or explicitly choose to bypass it.
+Like Claude Code CLI, h2c requires authentication for all mutating endpoints. But Hermes-Agent can simplify — either handle the auth flow itself, or bypass it entirely with `skip_permissions` for trusted workloads. Hermes-Agent must handle the same authentication and permission flow that human users would, or explicitly choose to bypass it.
 
 ### Create a Task
 
@@ -145,7 +145,7 @@ curl -X POST http://<host>:<port>/v1/task/cancel \
 
 ### Permission Pipeline
 
-hbridge includes a full permission pipeline — just like CI tools. Hermes-Agent can decide per-task how to handle tool approvals:
+h2c includes a full permission pipeline — just like CI tools. Hermes-Agent can decide per-task how to handle tool approvals:
 
 | Mode | Behavior |
 |------|----------|
@@ -158,7 +158,7 @@ For quick development tasks, use `skip_permissions`. For production workloads th
 ### Architecture
 
 ```
-Hermes ──HTTP──▶ hbridge :<port> ──spawn──▶ Session (Claude Code)
+Hermes ──HTTP──▶ h2c :<port> ──spawn──▶ Session (Claude Code)
   │                   │                              │
   │  Control Layer    │  server.mjs (HTTP routing)    │  reads CLAUDE.md
   │  (create/cancel/  │  bridge.mjs (session pool)    │  loads skills
@@ -206,7 +206,7 @@ Event types pushed over SSE:
 
 #### NDJSON Transcript
 
-The raw Claude Code stdout is saved to `~/.hbridge_transcript.jsonl`. Each line is a complete NDJSON message from Claude Code — `assistant` messages, `stream_event` deltas, `tool_use` blocks, and `result` messages with usage data:
+The raw Claude Code stdout is saved to `~/.h2c_transcript.jsonl`. Each line is a complete NDJSON message from Claude Code — `assistant` messages, `stream_event` deltas, `tool_use` blocks, and `result` messages with usage data:
 
 ```jsonl
 {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Fixing"}}}
@@ -223,7 +223,7 @@ Hermes-Agent can tail this file for full Claude Code session history, or consume
 | Document | Contents |
 |----------|----------|
 | [DESIGN.md](DESIGN.md) | Architecture, protocol, session lifecycle, permission pipeline, API reference, changelog |
-| [docs/local-mode.md](docs/local-mode.md) | HBRIDGE_HOME auto-start mode |
+| [docs/local-mode.md](docs/local-mode.md) | H2C_HOME auto-start mode |
 | [docs/spawn-mechanism.md](docs/spawn-mechanism.md) | Claude Code spawn protocol, NDJSON format |
 | [docs/mcp-spec.md](docs/mcp-spec.md) | MCP tool definitions (Claude Code integration) |
 

@@ -7,43 +7,43 @@ function assert(cond, msg) {
   else { console.error(`FAIL: ${msg}`); fail++; }
 }
 
-const saved = process.env.HBRIDGE_HOME;
+const saved = process.env.H2C_HOME;
 
 // ═══════════════════════════════════════════════════════════════
 // isHome()
 // ═══════════════════════════════════════════════════════════════
 
-// 1) isHome() returns true when HBRIDGE_HOME=1
-process.env.HBRIDGE_HOME = "1";
-assert(isHome() === true, "HBRIDGE_HOME=1 -> true");
+// 1) isHome() returns true when H2C_HOME=1
+process.env.H2C_HOME = "1";
+assert(isHome() === true, "H2C_HOME=1 -> true");
 
 // 2) isHome() false otherwise
-delete process.env.HBRIDGE_HOME;
+delete process.env.H2C_HOME;
 assert(isHome() === false, "unset -> false");
 
-process.env.HBRIDGE_HOME = "0";
-assert(isHome() === false, "HBRIDGE_HOME=0 -> false");
+process.env.H2C_HOME = "0";
+assert(isHome() === false, "H2C_HOME=0 -> false");
 
-process.env.HBRIDGE_HOME = "true";
-assert(isHome() === false, "HBRIDGE_HOME=true -> false");
+process.env.H2C_HOME = "true";
+assert(isHome() === false, "H2C_HOME=true -> false");
 
-process.env.HBRIDGE_HOME = "false";
-assert(isHome() === false, "HBRIDGE_HOME=false -> false");
+process.env.H2C_HOME = "false";
+assert(isHome() === false, "H2C_HOME=false -> false");
 
-process.env.HBRIDGE_HOME = "";
-assert(isHome() === false, "HBRIDGE_HOME='' -> false");
+process.env.H2C_HOME = "";
+assert(isHome() === false, "H2C_HOME='' -> false");
 
-process.env.HBRIDGE_HOME = "yes";
-assert(isHome() === false, "HBRIDGE_HOME=yes -> false");
+process.env.H2C_HOME = "yes";
+assert(isHome() === false, "H2C_HOME=yes -> false");
 
-process.env.HBRIDGE_HOME = "2";
-assert(isHome() === false, "HBRIDGE_HOME=2 -> false (strict ==1)");
+process.env.H2C_HOME = "2";
+assert(isHome() === false, "H2C_HOME=2 -> false (strict ==1)");
 
 // NOTE: == coerces ' 1' and '1 ' to numeric 1, so those are truthy.
 // Only exact non-"1" strings are truly false.
 
 // Restore for port tests
-process.env.HBRIDGE_HOME = saved;
+process.env.H2C_HOME = saved;
 
 // ═══════════════════════════════════════════════════════════════
 // homePort() — range
@@ -134,7 +134,7 @@ assert(homePort("/home/user/project") === 9578, 'homePort("/home/user/project") 
 assert(homePort("D:/xu_git/hermes-claude-bridge") === 9330, 'homePort("D:/xu_git/hermes-claude-bridge") === 9330');
 
 // Cleanup
-process.env.HBRIDGE_HOME = saved;
+process.env.H2C_HOME = saved;
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

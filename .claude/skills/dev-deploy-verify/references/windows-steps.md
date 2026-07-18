@@ -4,8 +4,8 @@
 
 ```powershell
 cd %TEMP%
-git clone https://github.com/xuhancn/hermes-claude-bridge.git hbridge-verify
-cd hbridge-verify
+git clone https://github.com/xuhancn/hermes-claude-bridge.git h2c-verify
+cd h2c-verify
 dir
 ```
 
@@ -16,22 +16,22 @@ npm install
 ```
 
 Verify:
-- `dir dist\hbridge.mjs` exists
+- `dir dist\h2c.mjs` exists
 - `dir dist\statusline.mjs` exists
-- `%USERPROFILE%\.claude.json` has `mcpServers.hbridge`
+- `%USERPROFILE%\.claude.json` has `mcpServers.h2c`
 - `%USERPROFILE%\.claude\settings.json` has `statusLine.command`
 
 ## Step 3: Global install
 
 ```powershell
 npm install -g .
-where hbridge
-hbridge --help
+where h2c
+h2c --help
 ```
 
 ## Step 4: Start in Claude Code
 
-Open Claude Code, run: `enable hbridge for user testuser`
+Open Claude Code, run: `enable h2c for user testuser`
 
 Verify:
 - Returns key `hb_XXXX-XXXX`
@@ -59,11 +59,11 @@ Expected: `{"retrieval_status":"success","task":{"status":"done","result":"..."}
 
 ## Step 7: Check statusLine
 
-Claude Code bottom-right corner: `hbridge: on | :9190`
+Claude Code bottom-right corner: `h2c: on | :9190`
 
 ## Step 8: Cleanup
 
 ```powershell
-rd /s /q hbridge_tasks 2>nul
-del %USERPROFILE%\.hbridge_state.json 2>nul
+rd /s /q h2c_tasks 2>nul
+del %USERPROFILE%\.h2c_state.json 2>nul
 ```

@@ -1,11 +1,11 @@
 /**
- * hbridge Home Local Mode (HBRIDGE_HOME) + deterministic port/key
+ * h2c Home Local Mode (H2C_HOME) + deterministic port/key
  *
- * When HBRIDGE_HOME=1, the bridge runs in local-only mode:
+ * When H2C_HOME=1, the bridge runs in local-only mode:
  *   - No authentication
  *   - Port derived deterministically from the working directory
  *     (9200 + MD5(cwd)[0:2] % 600 → range [9200, 9799])
- *   - Key: random base52, stored in ~/.hbridge_key (machine-global)
+ *   - Key: random base52, stored in ~/.h2c_key (machine-global)
  *   - Auto-starts without --enable flag
  *
  * Port is derived deterministically from cwd. Key is random and
@@ -18,11 +18,11 @@ import { join } from "path";
 import { homedir } from "os";
 
 const BASE52 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const KEY_FILE = join(homedir(), ".hbridge_key");
+const KEY_FILE = join(homedir(), ".h2c_key");
 
-/** True when HBRIDGE_HOME env var is exactly "1". */
+/** True when H2C_HOME env var is exactly "1". */
 export function isHome() {
-  return process.env.HBRIDGE_HOME == 1;
+  return process.env.H2C_HOME == 1;
 }
 
 /**
@@ -38,7 +38,7 @@ export function homePort(cwd) {
 /**
  * Key for this machine.
  *
- * Returns the random base52 key from ~/.hbridge_key. If the file
+ * Returns the random base52 key from ~/.h2c_key. If the file
  * is missing, empty, or contains an invalid key, generates a new
  * random key and saves it. Same key for all directories on one machine.
  *
@@ -48,13 +48,13 @@ export function homeKey(_cwd) {
   // Read first — if file exists with a valid key, return it
   if (existsSync(KEY_FILE)) {
     const existing = readFileSync(KEY_FILE, "utf8").trim();
-    if (existing && existing.startsWith("hb_")) {
+    if (existing && existing.startsWith("h2c_")) {
       return existing;
     }
   }
   // Generate a new key if file missing, empty, or contains garbage
   const bytes = randomBytes(8);
-  let key = "hb_";
+  let key = "h2c_";
   for (const byte of bytes) {
     key += BASE52[byte % 52];
   }

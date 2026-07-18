@@ -1,9 +1,9 @@
 /**
- * hbridge shared state — persisted to ~/.hbridge_state.json
+ * h2c shared state — persisted to ~/.h2c_state.json
  *
  * Written by:
  *   - server.mjs (on HTTP server start/stop)
- *   - mcp.mjs    (on hbridge_enable/hbridge_disable)
+ *   - mcp.mjs    (on h2c_enable/h2c_disable)
  *
  * Read by:
  *   - statusline.mjs (Claude Code statusLine hook)
@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
-const STATE_FILE = join(homedir(), ".hbridge_state.json");
+const STATE_FILE = join(homedir(), ".h2c_state.json");
 
 const DEFAULT_STATE = {
   running: false,
