@@ -10,4 +10,4 @@
 
 The 5-minute hard timeout (`TASK_TIMEOUT_MS = 300_000`) could kill long-running tasks.
 
-**Fix:** Timeout is now opt-in. Default is `0` (no timeout). Set `HBRIDGE_TASK_TIMEOUT_MS` env var or pass `taskTimeoutMs` to the Bridge/Session constructor to enable it.
+**Fix:** Timeout is now opt-in. Default is `0` (no timeout). Pass `taskTimeoutMs` to the Bridge/Session constructor to enable it.

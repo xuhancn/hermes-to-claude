@@ -34,7 +34,7 @@ HBRIDGE_HOME=1 node dist/hbridge.mjs
 | Auth | Basic Auth required (machine key) | **No auth** (localhost trust) |
 | Port | hash(cwd) → [9200, 9799] | **hash(cwd)** → [9200, 9799] |
 | Listen | All interfaces (0.0.0.0) | **127.0.0.1 only** |
-| Lifecycle | Manual `--disable` | **Auto-stop on Claude exit** |
+| Lifecycle | Manual `--disable` | ****Auto-stop on MCP process exit** (HTTP server lives in same process)** |
 
 Both modes use the same machine-global key (stored in `~/.hbridge_key`); home mode simply skips the auth check.
 

@@ -13,7 +13,7 @@ Server → Client:  initialize response (protocolVersion + capabilities + server
 Client → Server:  notifications/initialized  (no response needed)
 ```
 
-**hbridge implementation**: `mcp.mjs` lines 17-21
+**hbridge implementation**: `mcp.mjs` lines 79-88
 
 ## 2. Capabilities — tools MUST declare listChanged
 
@@ -24,7 +24,7 @@ Client → Server:  notifications/initialized  (no response needed)
 {"capabilities": {"tools": {"listChanged": true}}}
 ```
 
-**hbridge implementation**: `mcp.mjs` line 19 — `capabilities: { tools: { listChanged: true } }`
+**hbridge implementation**: `mcp.mjs` line 85 — `capabilities: { tools: { listChanged: true } }`
 
 ## 3. Tool Definition Format
 
@@ -35,7 +35,7 @@ Client → Server:  notifications/initialized  (no response needed)
 - `description` (string, optional) — human-readable description
 - `inputSchema` (object, required) — JSON Schema for tool parameters
 
-**hbridge implementation**: `mcp.mjs` TOOLS array, lines 33-38 — all 5 tools have name + description + inputSchema
+**hbridge implementation**: `mcp.mjs` TOOLS array, lines 292-322 — all 4 tools have name + description + inputSchema
 
 ## 4. tools/list Response
 
@@ -46,7 +46,7 @@ Client → Server:  notifications/initialized  (no response needed)
 {"tools": [Tool, Tool, ...]}
 ```
 
-**hbridge implementation**: `mcp.mjs` line 24 — respond({ result: { tools: TOOLS } })
+**hbridge implementation**: `mcp.mjs` line 89 — respond({ result: { tools: TOOLS } })
 
 ## 5. tools/call Response
 
@@ -57,13 +57,29 @@ Client → Server:  notifications/initialized  (no response needed)
 {"content": [{"type": "text", "text": "result string"}]}
 ```
 
-**hbridge implementation**: `mcp.mjs` lines 27-31 — respond({ result: { content: [{ type: "text", text: t }] } })
+**hbridge implementation**: `mcp.mjs` lines 161-164 — respond({ result: { content: [{ type: "text", text: t }] } })
 
-## 6. Validation Results
+## 6. Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `hbridge_enable` | Start hbridge HTTP server, show access key |
+| `hbridge_disable` | Stop hbridge server |
+| `hbridge_status` | Show server status + last client connection info |
+| `hbridge_status_bar` | Show/hide hbridge status in Claude Code status bar |
+
+## 7. Additional Features
+
+- **Stdout guard** (`mcp.mjs` lines 25-32): Non-JSON stdout writes are redirected to stderr to prevent third-party console.log from corrupting the MCP JSON-RPC stream.
+- **Crash protection** (`mcp.mjs` lines 35-40): `uncaughtException` and `unhandledRejection` handlers keep the MCP process alive.
+- **HTTP inbox server** (`mcp.mjs` lines 180-285): When `HBRIDGE_HOME=1`, the MCP server also auto-starts an HTTP server on the deterministic port.
+- **Server info**: `serverInfo: { name: "hbridge", version: "1.0.0" }` in initialize response.
+
+## 8. Validation Results
 
 ```
 ✅ initialize   → protocolVersion:2024-11-05, capabilities.listChanged:true
-✅ tools/list   → 5 tools with name+description+inputSchema
+✅ tools/list   → 4 tools with name+description+inputSchema
 ✅ tools/call   → content[{type:text,text:...}]
 ✅ notified/init → silent accept
 ```

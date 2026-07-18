@@ -10,9 +10,14 @@
 npm install && npm run build
 
 ## Test
-- src/hbridge/cli.mjs --enable xu → verify startup + key generation
-- curl health → {"status":"ok"}
-- curl task/create → {task_id: "..."}
+- `node tests/test_bridge.mjs` — Bridge pool unit tests (46 assertions)
+- `node tests/test_e2e.mjs` — Full integration test w/ mock child (49 assertions)
+- `node src/hbridge/transport/__tests__/run-all.mjs` — Transport layer tests (149 assertions)
+- `node tests/test_persistence.mjs` — Task persistence tests (22 assertions)
+- `node tests/test_cli.mjs` — CLI argument parsing tests (12 assertions)
+- `for f in tests/test_*.mjs; do node "$f"; done` — Run all test files
+- `curl http://127.0.0.1:9761/health` → `{"status":"ok"}`
+- `curl -X POST http://127.0.0.1:9761/v1/task/create -d '{"prompt":"hi"}'` → `{"task_id":"...","status":"created"}`
 
 ## Commit
 - 每批 ≤ 5 文件
@@ -20,7 +25,7 @@ npm install && npm run build
 
 ## 禁止
 - ❌ 不推倒重来 (no revert-then-rewrite)
-- ✅ 增量修改 (delta changes only — edit lines, don"t replace files)
+- ✅ 增量修改 (delta changes only — edit lines, don't replace files)
 - ✅ 出问题回退到正确版本，保留正确部分
 - ❌ 不建新 repo
 - ❌ 不直接推 main

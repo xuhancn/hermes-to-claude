@@ -77,7 +77,7 @@ function showHelp() {
     hbridge --status         Show status + last client connection
     hbridge --help           Show this help
 
-  Port and key are derived from the working directory.
+  Port is derived from the working directory; key is machine-global from ~/.hbridge_key.
   Home mode (HBRIDGE_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:
