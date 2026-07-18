@@ -1,5 +1,3 @@
-import http from "http";
-import { randomUUID } from "crypto";
 import { execSync } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
@@ -8,6 +6,7 @@ import { homedir } from "os";
 import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
+import { createServer } from "./server.mjs";
 
 // ─── Paths for status bar toggle ────────────────────────────────────────
 
@@ -40,11 +39,11 @@ export function startMcpServer() {
   });
 
   const key = homeKey(process.cwd());
-  const bridge = new Bridge();
+  mcpBridge = new Bridge();
 
   // Home Mode — auto-start HTTP server (no enable needed)
   if (process.env.HBRIDGE_HOME === "1") {
-    startInboxServer(key, bridge);
+    ensureHttpServer(key, mcpBridge);
   }
 
   let buf = "";
@@ -72,7 +71,7 @@ export function startMcpServer() {
   process.stdin.on("data", () => {});
 }
 
-function handleMcp(msg, key, bridge) {
+function handleMcp(msg, key) {
   const { method, params, id } = msg;
   if (method === "notifications/initialized") return;
 
@@ -95,7 +94,7 @@ function handleMcp(msg, key, bridge) {
     if (name === "hbridge_enable") {
       const port = homePort(process.cwd());
       const k = homeKey(process.cwd());
-      startInboxServer(k, bridge);
+      ensureHttpServer(k, mcpBridge);
       markRunning(port);
       t = k;
     } else if (name === "hbridge_disable") {
@@ -173,99 +172,24 @@ function handleMcp(msg, key, bridge) {
   }
 }
 
-// ─── HTTP server (same process as MCP) ──────────────────────────────────
+// ─── Shared HTTP server ────────────────────────────────────────────────
 
 let inboxServer = null;
+let mcpBridge = null;
 
-function startInboxServer(expectedKey, expectedBridge) {
+function ensureHttpServer(expectedKey, br) {
   if (inboxServer && inboxServer.listening) return;
-
   const port = homePort(process.cwd());
-  process.stderr.write(`[hbridge] HTTP inbox starting on :${port}\n`);
-
-  inboxServer = http.createServer((req, res) => {
-    try {
-      // Health check — no auth required (used by statusline liveness)
-      if (req.url === "/health") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
-        return;
-      }
-
-      // Auth (skip in home mode)
-      if (process.env.HBRIDGE_HOME != 1) {
-        const auth = req.headers["authorization"] || "";
-        const providedKey = Buffer.from(auth.split(" ")[1] || "", "base64")
-          .toString().split(":")[1];
-        if (providedKey !== expectedKey) {
-          res.writeHead(401);
-          res.end("Unauthorized");
-          return;
-        }
-      }
-
-      // Track connection info
-      const clientIP = req.socket.remoteAddress?.replace(/^::ffff:/, "") || "unknown";
-      writeState({ lastClientIP: clientIP, lastActiveAt: Date.now() });
-
-      const [_, v, endpoint, actionRaw] = req.url.split("/");
-      const action = actionRaw ? actionRaw.split("?")[0] : "";
-
-      if (endpoint === "task" && action === "create" && req.method === "POST") {
-        let body = "";
-        req.on("data", (d) => (body += d));
-        req.on("end", () => {
-          try {
-            const parsed = JSON.parse(body);
-            const prompt = parsed.prompt || "";
-            const taskId = `task_${randomUUID()}`;
-            const createOpts = {};
-            if (parsed.permission_mode) createOpts.permissionMode = parsed.permission_mode;
-            expectedBridge.createTask(prompt, taskId, createOpts).catch(() => {});
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ task_id: taskId, status: "created" }));
-          } catch (e) {
-            res.writeHead(400);
-            res.end(JSON.stringify({ error: e.message }));
-          }
-        });
-        return;
-      }
-
-      if (endpoint === "task" && action === "output" && req.method === "GET") {
-        const taskId = new URL(`http://localhost${req.url}`).searchParams.get(
-          "task_id"
-        );
-        const result = expectedBridge.getTaskOutput(taskId);
-        if (!result) {
-          res.writeHead(404);
-          res.end(JSON.stringify({ error: "not_found" }));
-          return;
-        }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(result));
-        return;
-      }
-
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: "not_found" }));
-    } catch (e) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: e.message }));
-    }
-  });
-
-  // Mark running only after successful listen
-  inboxServer.on("listening", () => {
+  process.stderr.write(`[hbridge] HTTP server starting on :${port}\n`);
+  const srv = createServer(expectedKey, br);
+  srv.on("listening", () => {
     markRunning(port);
-    process.stderr.write(`[hbridge] HTTP inbox listening on :${port}\n`);
+    process.stderr.write(`[hbridge] HTTP server listening on :${port}\n`);
   });
-
-  inboxServer.on("error", (err) => {
+  srv.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
-      process.stderr.write(`[hbridge] Port ${port} in use — killing old process\n`);
       inboxServer = null;
-      // Kill the process holding port, then retry
+      process.stderr.write(`[hbridge] Port ${port} in use — killing old process\n`);
       try {
         const pid = execSync(
           `fuser ${port}/tcp 2>/dev/null || ss -tlnp 2>/dev/null | grep ":${port}" | grep -oP "pid=\\K\\d+"`,
@@ -276,15 +200,15 @@ function startInboxServer(expectedKey, expectedBridge) {
           process.stderr.write(`[hbridge] Killed PID ${pid}\n`);
         }
       } catch { /* fuser/ss unavailable */ }
-      setTimeout(() => startInboxServer(expectedKey, manager), 300);
+      setTimeout(() => ensureHttpServer(expectedKey, br), 300);
       return;
     }
     process.stderr.write(`[hbridge] HTTP server error: ${err.message}\n`);
     markStopped();
     inboxServer = null;
   });
-
-  inboxServer.listen(port);
+  srv.listen(port);
+  inboxServer = srv;
 }
 
 // ─── MCP tools ────────────────────────────────────────────────────────
