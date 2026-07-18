@@ -90,18 +90,14 @@ function showHelp() {
 const args = process.argv.slice(2);
 const cmd = args[0];
 
-// Home mode: block manual enable/disable
-if (isHome() && (cmd === "--enable" || cmd === "--disable")) {
-  console.log("Home mode active — manual control disabled");
-  process.exit(0);
-}
-
-if (cmd === "--enable") cmd_enable();
+// Home mode: auto-start HTTP server, block --stdio (not needed)
+if (isHome()) {
+  cmd_enable();
+} else if (cmd === "--enable") cmd_enable();
 else if (cmd === "--disable") cmd_disable();
 else if (cmd === "--status") cmd_status();
 else if (cmd === "--stdio") { startMcpServer(); }
 else if (cmd === "--help" || cmd === "-h") { showHelp(); }
-else if (isHome()) { cmd_enable(); }
 else {
   console.log("hbridge — Hermes Bridge");
   console.log("  hbridge --enable           Start bridge");
