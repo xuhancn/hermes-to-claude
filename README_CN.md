@@ -33,7 +33,7 @@ h2c 需要 **Node.js ≥ 20**。
 | macOS | `brew install node` |
 | Windows | `winget install OpenJS.NodeJS` |
 
-### End User 安装
+### 普通用户安装
 
 一行命令全局安装：
 
@@ -41,7 +41,7 @@ h2c 需要 **Node.js ≥ 20**。
 npm install -g hermes-to-claude
 ```
 
-### Developer 安装
+### 开发者安装
 
 ```bash
 git clone https://github.com/xuhancn/hermes-to-claude.git
