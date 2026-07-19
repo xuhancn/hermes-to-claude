@@ -1,5 +1,7 @@
 # Hermes-to-Claude (h2c) — 中文文档
 
+
+[English](README.md)
 **Hermes-Agent** 通过 HTTP 控制多台 **Claude Code** 实例 —— 一个 agent， 多个 Claude worker。**无需 Pro/Max 订阅**。
 
 ```
