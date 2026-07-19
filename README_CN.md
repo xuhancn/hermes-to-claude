@@ -11,8 +11,6 @@
                             └───h2c───> 🔬 Claude Code (构建角色)
 ```
 
-[English](README.md)
-
 ---
 
 ## 1. h2c 优势
