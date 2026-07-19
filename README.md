@@ -144,15 +144,7 @@ h2c:
   key: h2c_XXXXXXXX
 ```
 
-Or set environment variables:
-
-```bash
-export H2C_HOST=<ip>
-export H2C_PORT=<port>
-export H2C_KEY=h2c_XXXXXXXX
-```
-
-Then Hermes-Agent can call h2c endpoints directly. See the API reference below.
+Hermes-Agent can call h2c endpoints directly with this config. See the API reference below.
 
 ### Health Check
 
