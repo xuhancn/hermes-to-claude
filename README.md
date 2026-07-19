@@ -1,4 +1,4 @@
-# Hermes-Claude-Bridge (h2c)
+# Hermes-to-Claude (h2c)
 
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
@@ -33,11 +33,22 @@ h2c requires **Node.js ≥ 20**. Install it for your platform:
 | macOS | `brew install node` |
 | Windows | `winget install OpenJS.NodeJS` or download from https://nodejs.org |
 
-### Install
+### Installation
+
+**For End User**, One command to install globally:
+
+```bash
+npm install -g hermes-to-claude
+```
+
+This makes the `h2c` command available everywhere on your system.
+
+
+**For Developer**, For contributors who want to hack on h2c itself:
 
 ```bash
 git clone https://github.com/xuhancn/hermes-to-claude.git
-cd hermes-claude-bridge
+cd hermes-to-claude
 npm install && npm run build
 ```
 
