@@ -25,5 +25,17 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
-  }
+  },
+  "keywords": [
+    "hermes",
+    "claude",
+    "claude-code",
+    "h2c",
+    "agent",
+    "orchestrator",
+    "bridge",
+    "multi-agent",
+    "ai-agent",
+    "hermes-agent"
+  ]
 }
