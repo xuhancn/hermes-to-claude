@@ -136,15 +136,34 @@ curl -X POST http://<host>:<port>/v1/task/create \
 Give Hermes-Agent the port and key. Add to `~/.hermes/config.yaml`:
 
 ```yaml
+# Single h2c instance
 h2c:
-  project: my-app           # project name (any label)
-  cwd: /path/to/project     # Claude's working directory
+  project: my-app
+  cwd: /path/to/project
   host: <ip>
   port: <port>
   key: h2c_XXXXXXXX
+
+# Multiple machines (10 h2c instances):
+h2c_farm:
+  coding:
+    host: 192.168.27.88
+    port: 9761
+    key: h2c_XXXXXXXX
+    cwd: /home/xu/coding
+  testing:
+    host: 192.168.27.243
+    port: 9709
+    key: h2c_YYYYYYYY
+    cwd: /home/xu/testing
+  building:
+    host: 192.168.27.225
+    port: 9352
+    key: h2c_ZZZZZZZZ
+    cwd: /home/xu/building
 ```
 
-Hermes-Agent can call h2c endpoints directly with this config. See the API reference below.
+Hermes-Agent reads the config and dispatches tasks to the right machine based on project. See the API reference below.
 
 ### Health Check
 
