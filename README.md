@@ -35,9 +35,7 @@ h2c requires **Node.js ≥ 20**. Install it for your platform:
 
 ### Installation
 
-**For End User**
-
-One command to install globally:
+**For End User**, One command to install globally:
 
 ```bash
 npm install -g hermes-to-claude
@@ -46,9 +44,7 @@ npm install -g hermes-to-claude
 This makes the `h2c` command available everywhere on your system.
 
 
-**For Developer**
-
-For contributors who want to hack on h2c itself:
+**For Developer**, For contributors who want to hack on h2c itself:
 
 ```bash
 git clone https://github.com/xuhancn/hermes-to-claude.git
