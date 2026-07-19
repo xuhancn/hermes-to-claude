@@ -1,4 +1,4 @@
-# Hermes-Claude-Bridge (h2c)
+# Hermes-to-Claude (h2c)
 
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. No Pro/Max subscription required.
 
