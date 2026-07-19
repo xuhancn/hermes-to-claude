@@ -33,7 +33,9 @@ h2c requires **Node.js ≥ 20**. Install it for your platform:
 | macOS | `brew install node` |
 | Windows | `winget install OpenJS.NodeJS` or download from https://nodejs.org |
 
-### End User Install
+### Installation
+
+** For end user **
 
 One command to install globally:
 
@@ -44,7 +46,7 @@ npm install -g hermes-to-claude
 This makes the `h2c` command available everywhere on your system.
 
 
-### Developer Install
+** For Developer **
 
 For contributors who want to hack on h2c itself:
 
