@@ -140,6 +140,7 @@ h2c:
   host: <ip>
   port: <port>
   key: h2c_XXXXXXXX
+  cwd: /path/to/project    # Claude's working directory
 ```
 
 Or set environment variables:
