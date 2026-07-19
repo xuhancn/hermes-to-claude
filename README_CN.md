@@ -1,4 +1,6 @@
-# Hermes-to-Claude (h2c) — 中文文档
+# Hermes-to-Claude (h2c)
+
+[English](README.md) | **中文**
 
 
 [English](README.md)
