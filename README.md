@@ -1,5 +1,7 @@
 # Hermes-to-Claude (h2c)
 
+**English** | [中文](README_CN.md)
+
 **Hermes-Agent** controls multiple **Claude Code** instances via HTTP — one agent, many Claude workers. **No Pro/Max subscription required**.
 
 ```
