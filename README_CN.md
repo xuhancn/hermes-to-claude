@@ -1,6 +1,8 @@
 [English](README.md) | **中文**
 
-# Hermes-to-Claude (h2c)  **Hermes-Agent** 通过 HTTP 控制多台 **Claude Code** 实例 —— 一个 agent， 多个 Claude worker。**无需 Pro/Max 订阅**。
+# Hermes-to-Claude (h2c)
+
+**Hermes-Agent** 通过 HTTP 控制多台 **Claude Code** 实例 —— 一个 agent， 多个 Claude worker。**无需 Pro/Max 订阅**。
 
 ```
 📱 User ----HTTP----> 🤖 Hermes-Agent ----h2c----> 🏭 Claude Code (部署角色)
