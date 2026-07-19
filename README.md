@@ -137,10 +137,11 @@ Give Hermes-Agent the port and key. Add to `~/.hermes/config.yaml`:
 
 ```yaml
 h2c:
+  project: my-app           # project name (any label)
+  cwd: /path/to/project     # Claude's working directory
   host: <ip>
   port: <port>
   key: h2c_XXXXXXXX
-  cwd: /path/to/project    # Claude's working directory
 ```
 
 Or set environment variables:
