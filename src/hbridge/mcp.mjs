@@ -125,6 +125,8 @@ function handleMcp(msg, key) {
       const ips = getLocalIPs();
       const ip = isHome() ? "127.0.0.1" : (ips[0] || "127.0.0.1");
       t = `h2c enabled
+👉 Hermes-Agent → https://github.com/xuhancn/hermes-to-claude#3-for-hermes-agent
+
 📂 ${process.cwd()}
 🔑 ${ip}:${port} | ${k} | ${H2C_VERSION}`;
     } else if (name === "h2c_disable") {
