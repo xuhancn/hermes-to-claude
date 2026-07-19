@@ -25,6 +25,7 @@ async function cmd_enable() {
   console.log("h2c enabled");
   console.log("📂 " + cwd);
   console.log("🔑 " + ip + ":" + port + " | " + key + " | " + H2C_VERSION);
+  console.log("\n👉 Hermes-Agent → https://github.com/xuhancn/hermes-to-claude#3-for-hermes-agent");
 
   server = createServer(key);
   server.on("error", (err) => {
@@ -71,6 +72,7 @@ function cmd_status() {
   console.log(running ? "h2c enabled" : "h2c stopped");
   console.log("📂 " + cwd);
   console.log("🔑 " + ip + ":" + port + " | " + key + " | " + H2C_VERSION);
+  console.log("\n👉 Hermes-Agent → https://github.com/xuhancn/hermes-to-claude#3-for-hermes-agent");
 }
 
 function showHelp() {

@@ -131,6 +131,27 @@ curl -X POST http://<host>:<port>/v1/task/create \
 | `cwd` | string | Working directory for the Claude session |
 | `sessionId` | string | Reuse an existing Claude session |
 
+### Connect Hermes-Agent
+
+Give Hermes-Agent the port and key. Add to `~/.hermes/config.yaml`:
+
+```yaml
+h2c:
+  host: <ip>
+  port: <port>
+  key: h2c_XXXXXXXX
+```
+
+Or set environment variables:
+
+```bash
+export H2C_HOST=<ip>
+export H2C_PORT=<port>
+export H2C_KEY=h2c_XXXXXXXX
+```
+
+Then Hermes-Agent can call h2c endpoints directly. See the API reference below.
+
 ### Health Check
 
 Verify the server is reachable — no authentication required:
