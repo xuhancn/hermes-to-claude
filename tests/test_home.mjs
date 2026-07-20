@@ -1,5 +1,5 @@
 // Test home.mjs — isHome() + homePort()
-import { isHome, homePort } from "../src/hbridge/home.mjs";
+import { isHome, homePort } from "../src/hermes_to_claude/home.mjs";
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {

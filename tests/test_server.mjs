@@ -1,5 +1,5 @@
 // Test HTTP server structure — just check exports exist
-import { createServer, startStatusBar } from "../src/hbridge/server.mjs";
+import { createServer, startStatusBar } from "../src/hermes_to_claude/server.mjs";
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {

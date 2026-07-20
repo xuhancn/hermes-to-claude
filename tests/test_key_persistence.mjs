@@ -3,7 +3,7 @@ import { unlinkSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
-import { homeKey } from "../src/hbridge/home.mjs";
+import { homeKey } from "../src/hermes_to_claude/home.mjs";
 
 const KEY_FILE = join(homedir(), ".h2c_key");
 let pass = 0, fail = 0;

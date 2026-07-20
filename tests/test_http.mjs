@@ -1,6 +1,6 @@
 // Test HTTP server structure — health + auth
-import { createServer } from "../src/hbridge/server.mjs";
-import { homeKey } from "../src/hbridge/home.mjs";
+import { createServer } from "../src/hermes_to_claude/server.mjs";
+import { homeKey } from "../src/hermes_to_claude/home.mjs";
 import { request } from "http";
 
 let pass = 0, fail = 0;
