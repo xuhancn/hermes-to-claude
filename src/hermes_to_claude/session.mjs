@@ -111,20 +111,18 @@ export class Session {
     if (this._skipPermissions) claudeArgs.push("--dangerously-skip-permissions");
 
     try {
-      // Use cd wrapper so Claude CLI inherits correct cwd
-      if (!isWin) {
-        const cmd = "sh";
-        const args = ["-c", `cd "${cwd}" && npx ${claudeArgs.join(" ")}`];
-        this.child = spawn(cmd, args, {
-          stdio: ["pipe", "pipe", "pipe"],
-          env: { ...process.env },
-        });
-      } else {
-        this.child = spawn("cmd.exe", ["/d", "/s", "/c", `cd /d "${cwd}" && npx.cmd ${claudeArgs.join(" ")}`], {
-          stdio: ["pipe", "pipe", "pipe"],
-          env: { ...process.env },
-        });
-      }
+      // cwd passed as spawn option so Claude CLI + its tools inherit correct dir.
+      // (Inline `cd /d "<cwd>"` was avoided: quoted backslash paths break cmd.exe
+      //  with "filename syntax incorrect" on Windows — see repro in PR review.)
+      const cmd = isWin ? "cmd.exe" : "npx";
+      const args = isWin
+        ? ["/d", "/s", "/c", `npx.cmd ${claudeArgs.join(" ")}`]
+        : claudeArgs;
+      this.child = spawn(cmd, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd,
+        env: { ...process.env },
+      });
     } catch (err) {
       process.stderr.write(`[session] spawn error: ${err.message}\n`);
       this.status = "failed";
