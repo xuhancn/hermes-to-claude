@@ -10,8 +10,8 @@
 // These tests verify the FIXED behavior: h2c_status must check
 // state.running before deciding whether to say "running" or "stopped".
 
-import { readState, writeState, markRunning, markStopped } from "../src/hbridge/state.mjs";
-import { homePort } from "../src/hbridge/home.mjs";
+import { readState, writeState, markRunning, markStopped } from "../src/hermes_to_claude/state.mjs";
+import { homePort } from "../src/hermes_to_claude/home.mjs";
 import { unlinkSync, existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";

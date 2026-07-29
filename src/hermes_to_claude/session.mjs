@@ -101,7 +101,6 @@ export class Session {
 
     const cwd = this._cwd || process.cwd();
     const isWin = process.platform === "win32";
-    // Build CLI args — Hermes controls skip_permissions per task
     const claudeArgs = [
       "@anthropic-ai/claude-code",
       "--print",
@@ -110,12 +109,15 @@ export class Session {
       "--verbose",
     ];
     if (this._skipPermissions) claudeArgs.push("--dangerously-skip-permissions");
-    const cmd = isWin ? "cmd.exe" : "npx";
-    const args = isWin
-      ? ["/d", "/s", "/c", `npx.cmd ${claudeArgs.join(" ")}`]
-      : claudeArgs;
 
     try {
+      // cwd passed as spawn option so Claude CLI + its tools inherit correct dir.
+      // (Inline `cd /d "<cwd>"` was avoided: quoted backslash paths break cmd.exe
+      //  with "filename syntax incorrect" on Windows — see repro in PR review.)
+      const cmd = isWin ? "cmd.exe" : "npx";
+      const args = isWin
+        ? ["/d", "/s", "/c", `npx.cmd ${claudeArgs.join(" ")}`]
+        : claudeArgs;
       this.child = spawn(cmd, args, {
         stdio: ["pipe", "pipe", "pipe"],
         cwd,

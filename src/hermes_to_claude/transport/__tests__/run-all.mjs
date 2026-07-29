@@ -2,7 +2,7 @@
 /**
  * Comprehensive unit tests for transport layer + bridge messaging.
  *
- * Run: node src/hbridge/transport/__tests__/run-all.mjs
+ * Run: node src/hermes_to_claude/transport/__tests__/run-all.mjs
  * No test framework required — plain assertions with descriptive output.
  */
 

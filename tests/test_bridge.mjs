@@ -1,6 +1,6 @@
 // Test Bridge class — session pool, persistence, getTask/getTaskOutput
-import { Bridge } from "../src/hbridge/bridge.mjs";
-import { appendCompletedTask, getTasksFilePath } from "../src/hbridge/persistence.mjs";
+import { Bridge } from "../src/hermes_to_claude/bridge.mjs";
+import { appendCompletedTask, getTasksFilePath } from "../src/hermes_to_claude/persistence.mjs";
 import { unlinkSync, existsSync, readFileSync } from "fs";
 
 let pass = 0, fail = 0;
@@ -60,7 +60,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 // ── Test 3: cancelTask — session ─────────────────────────────────────
 {
   const b = new Bridge({ maxConcurrent: 3 });
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-cancel-session", prompt: "test" });
   s.status = "running";
   b._sessions.set("t-cancel-session", s);
@@ -98,7 +98,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 // ── Test 7: getTask / getTaskOutput — session (pending) ─────────────
 {
   const b = new Bridge({ maxConcurrent: 3 });
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-get-sess", prompt: "test" });
   s.status = "running";
   b._sessions.set("t-get-sess", s);
@@ -116,7 +116,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 // ── Test 8: getTask / getTaskOutput — session (done) ─────────────────
 {
   const b = new Bridge({ maxConcurrent: 3 });
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-get-done", prompt: "test" });
   s.status = "done";
   s.result = "completed";
@@ -169,7 +169,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
   // Subscribe before session exists (pending storage)
   b.subscribeTask("t-sub", sub);
   // Now add a session
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-sub", prompt: "test" });
   b._sessions.set("t-sub", s);
   // Re-subscribe now that session exists
@@ -185,7 +185,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 
 // ── Test 12: Persistence trim doesn't throw ──────────────────────────
 {
-  const { trimCompletedTasks } = await import("../src/hbridge/persistence.mjs");
+  const { trimCompletedTasks } = await import("../src/hermes_to_claude/persistence.mjs");
   trimCompletedTasks(); // no-op when under limit
   assert(true, "trimCompletedTasks is safe to call");
 }
@@ -193,7 +193,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 // ── Test 13: createTask with auto-generated ID ──────────────────────
 {
   const b = new Bridge({ maxConcurrent: 5 });
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-auto", prompt: "auto-gen" });
   s.status = "running";
   b._sessions.set("t-auto", s);
@@ -209,7 +209,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
   const chunks = [];
   const sub = { write: d => chunks.push(d) };
   b.subscribeTask("t-pending-sub", sub);
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-pending-sub", prompt: "test" });
   b._sessions.set("t-pending-sub", s);
   b.subscribeTask("t-pending-sub", sub);
@@ -236,7 +236,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 
 // ── Test 17: _failTask sets exitCode=1 ────────────────────────────
 {
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-fail", prompt: "fail" });
   s._failTask("error");
   assert(s.exitCode === 1, "_failTask exitCode=1");
@@ -245,7 +245,7 @@ const backupTasks = existsSync(TASK_FILE) ? readFileSync(TASK_FILE, "utf8") : ""
 
 // ── Test 18: _finishTask is idempotent ────────────────────────────
 {
-  const { Session } = await import("../src/hbridge/session.mjs");
+  const { Session } = await import("../src/hermes_to_claude/session.mjs");
   const s = new Session({ taskId: "t-finish2", prompt: "finish" });
   s._finishTask(0);
   s._finishTask(0);

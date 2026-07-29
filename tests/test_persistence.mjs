@@ -4,7 +4,7 @@
  */
 
 import { unlinkSync, existsSync, appendFileSync } from "fs";
-import { appendCompletedTask, loadCompletedTasks, findCompletedTask, getTasksFilePath } from "../src/hbridge/persistence.mjs";
+import { appendCompletedTask, loadCompletedTasks, findCompletedTask, getTasksFilePath } from "../src/hermes_to_claude/persistence.mjs";
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {

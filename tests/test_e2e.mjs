@@ -44,8 +44,8 @@ async function main() {
   // ── Phase 1: Bridge + Session lifecycle ─────────────────────
   group('Phase 1: Bridge.createTask + getTaskOutput via Session');
 
-  const { Bridge } = await imp(join(PROJECT_ROOT, 'src/hbridge/bridge.mjs'));
-  const { Session } = await imp(join(PROJECT_ROOT, 'src/hbridge/session.mjs'));
+  const { Bridge } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/bridge.mjs'));
+  const { Session } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/session.mjs'));
   const bridge = new Bridge({ maxConcurrent: 5 });
 
   // Create a task manually via Session, then register in Bridge for lookup
@@ -83,7 +83,7 @@ async function main() {
   // ── Phase 3: HTTP server endpoints ─────────────────────────
   group('Phase 3: HTTP server endpoints');
 
-  const { createServer: createHttpServer } = await imp(join(PROJECT_ROOT, 'src/hbridge/server.mjs'));
+  const { createServer: createHttpServer } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/server.mjs'));
   const b3 = new Bridge({ maxConcurrent: 5 });
 
   process.env.H2C_HOME = '1'; // skip auth
@@ -207,7 +207,7 @@ async function main() {
   // ── Phase 9: NDJSON stdout guard (MCP mode) ─────────────
   group('Phase 9: NDJSON stdout guard');
 
-  const { startMcpServer: startMcp } = await imp(join(PROJECT_ROOT, 'src/hbridge/mcp.mjs'));
+  const { startMcpServer: startMcp } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/mcp.mjs'));
   ok('mcp.mjs exports startMcpServer (guard applied at startup)');
 
   const guardText = startMcp.toString();
@@ -283,7 +283,7 @@ async function main() {
   // ── Phase 13: Persistence (survive restart) ────────────────
   group('Phase 13: Task persistence (survive restart)');
 
-  const { getTasksFilePath, appendCompletedTask, loadCompletedTasks } = await imp(join(PROJECT_ROOT, 'src/hbridge/persistence.mjs'));
+  const { getTasksFilePath, appendCompletedTask, loadCompletedTasks } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/persistence.mjs'));
   const taskFile = getTasksFilePath();
 
   // Clean up
@@ -375,7 +375,7 @@ async function main() {
   // ── Phase 18: Persistence trim ─────────────────────────────
   group('Phase 18: Persistence trim');
 
-  const { trimCompletedTasks } = await imp(join(PROJECT_ROOT, 'src/hbridge/persistence.mjs'));
+  const { trimCompletedTasks } = await imp(join(PROJECT_ROOT, 'src/hermes_to_claude/persistence.mjs'));
   const TASK_FILE2 = getTasksFilePath();
   try { unlinkSync(TASK_FILE2); } catch {}
 

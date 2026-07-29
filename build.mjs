@@ -14,7 +14,7 @@ console.log(`✓ version ${H2C_VERSION}`);
 
 // Build h2c CLI (dist/hbridge.mjs)
 await esbuild.build({
-  entryPoints: [path.join(SRC_DIR, 'hbridge', 'cli.mjs')],
+  entryPoints: [path.join(SRC_DIR, 'hermes_to_claude', 'cli.mjs')],
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -27,7 +27,7 @@ await esbuild.build({
 
 // Build statusline — pure Node.js, no external deps
 await esbuild.build({
-  entryPoints: [path.join(SRC_DIR, 'hbridge', 'statusline.mjs')],
+  entryPoints: [path.join(SRC_DIR, 'hermes_to_claude', 'statusline.mjs')],
   bundle: true,
   platform: 'node',
   format: 'esm',

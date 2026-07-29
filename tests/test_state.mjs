@@ -1,5 +1,5 @@
 // Test state.mjs — shared state management
-import { readState, writeState, markRunning, markStopped, incrementTasks } from "../src/hbridge/state.mjs";
+import { readState, writeState, markRunning, markStopped, incrementTasks } from "../src/hermes_to_claude/state.mjs";
 import { writeFileSync, unlinkSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
