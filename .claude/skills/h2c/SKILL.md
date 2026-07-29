@@ -23,9 +23,9 @@ Parse the args to determine the subcommand. The args string contains space-separ
 
 | Input | Command | Notes |
 |---|---|---|
-| `enable` | `node dist/hbridge.mjs enable` | Start server, show persistent machine key |
-| `disable` | `node dist/hbridge.mjs disable` | |
-| `status` | `node dist/hbridge.mjs status` | |
+| `enable` | `h2c enable` | Start server, show persistent machine key |
+| `disable` | `h2c disable` | |
+| `status` | `h2c status` | |
 | `status_bar on` | See `/h2c help` | |
 | `status_bar off` | See `/h2c help` | |
 | `help` or no args | Show help text | |
