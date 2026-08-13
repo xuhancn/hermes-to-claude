@@ -28,7 +28,7 @@
  * Set H2C_NO_AUTO_EXIT=1 to disable orphan detection entirely.
  */
 
-const STDIN_GRACE_MS = 300000;
+const STDIN_GRACE_MS = 360000;
 
 export function startStdinWatchdog({
   stdinGraceMs = STDIN_GRACE_MS,
