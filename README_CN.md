@@ -69,6 +69,13 @@ npm install && npm run build
 /h2c status
 ```
 
+### 孤儿进程自动退出
+
+h2c 作为 Claude Code 内部启动的后台进程运行。Claude Code 退出后，若不加处理 h2c 会残留为孤儿进程占用端口。为避免这种情况，h2c 监测自己的 stdin：当启动它的 Claude Code 退出时，管道关闭，h2c 自动退出并释放端口。
+
+- **宽限期**：360 秒（6 分钟）——此窗口内 h2c 保持存活供 Hermes-Agent 连接，超时后触发孤儿清理。
+- **禁用**：设置  可让 h2c 常驻不退（例如从终端启动时）。
+
 ### Home 模式 — 无界面机器
 
 当 Hermes-Agent 在无显示器的服务器上运行时，设置 **环境变量** `H2C_HOME=1`：
