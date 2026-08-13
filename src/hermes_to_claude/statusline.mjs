@@ -60,7 +60,7 @@ async function main() {
   if (existsSync(userCmdFile)) {
     try {
       const cmd = readFileSync(userCmdFile, "utf8").trim();
-      if (cmd) userPart = execSync(cmd, { encoding: "utf8", timeout: 2000 }).trim();
+      if (cmd && !cmd.includes("statusline.mjs")) userPart = execSync(cmd, { encoding: "utf8", timeout: 2000 }).trim();
     } catch { /* user command failed — skip */ }
   }
 
