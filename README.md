@@ -68,6 +68,15 @@ This starts the HTTP server. The port is derived from the working directory (see
 /h2c status
 ```
 
+### Orphan Auto-Exit / 孤儿自动退出
+
+h2c runs as a background process launched from inside Claude Code. When Claude Code exits, h2c would otherwise be left as an orphan holding the port. To prevent this, h2c watches its own stdin — when the launching Claude Code exits, the pipe closes and h2c shuts itself down, releasing the port.
+
+h2c 作为 Claude Code 内部启动的后台进程运行。Claude Code 退出后，若不加处理 h2c 会残留为孤儿进程占用端口。为避免这种情况，h2c 监测自己的 stdin：当启动它的 Claude Code 退出时，管道关闭，h2c 自动退出并释放端口。
+
+- **Grace period / 宽限期**: 360 seconds (6 minutes) — within this window h2c stays alive so Hermes-Agent can connect; once it elapses, orphan cleanup fires. 360 秒（6 分钟）：此窗口内 h2c 保持存活供 Hermes-Agent 连接，超时后触发孤儿清理。
+- **Disable / 禁用**: set  to keep h2c running indefinitely (e.g. from a terminal). 设置  可让 h2c 常驻不退（例如从终端启动时）。
+
 ### Home Mode — For Headless Machines
 
 When Hermes-Agent runs on a server with no display, no manual command is needed. Export the **environment variable** before starting h2c:
