@@ -11,7 +11,7 @@ Verify h2c from fresh clone to running service across Windows, Linux, macOS.
 
 ```
 npm install
-  → preinstall: build → dist/hbridge.mjs + dist/statusline.mjs
+  → prepare: build → dist/h2c.mjs + dist/statusline.mjs
   → postinstall: register MCP (~/.claude.json) + statusLine (~/.claude/settings.json)
 
 Claude Code starts → spawns h2c --stdio (MCP child process)
@@ -39,6 +39,6 @@ Claude Code starts → spawns h2c --stdio (MCP child process)
 
 If postinstall skipped:
 1. `npm run build`
-2. `/mcp add h2c -- node dist/hbridge.mjs --stdio`
+2. `/mcp add h2c -- node dist/h2c.mjs --stdio`
 3. Add to `~/.claude/settings.json`:
    `{"statusLine":{"type":"command","command":"node /path/to/dist/statusline.mjs"}}`
