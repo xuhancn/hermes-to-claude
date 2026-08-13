@@ -12,13 +12,13 @@ const hash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim()
 const H2C_VERSION = `v${count}.0.${hash}`;
 console.log(`✓ version ${H2C_VERSION}`);
 
-// Build h2c CLI (dist/hbridge.mjs)
+// Build h2c CLI (dist/h2c.mjs)
 await esbuild.build({
   entryPoints: [path.join(SRC_DIR, 'hermes_to_claude', 'cli.mjs')],
   bundle: true,
   platform: 'node',
   format: 'esm',
-  outfile: 'dist/hbridge.mjs',
+  outfile: 'dist/h2c.mjs',
   external: ['zod', 'chalk', 'axios', '@anthropic-ai/sdk', 'qrcode', 'lodash-es', 'get-east-asian-width'],
   define: {
     'globalThis.H2C_VERSION': JSON.stringify(H2C_VERSION),
