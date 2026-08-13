@@ -48,7 +48,7 @@ Each working directory gets a deterministic port, stable across runs and machine
 
 ## Implementation
 
-Implemented in `src/h2c/home.mjs`:
+Implemented in `src/hermes_to_claude/home.mjs`:
 
 1. `isHome()` — checks `H2C_HOME == 1` (strict)
 2. `homePort(cwd)` — returns `9200 + MD5(cwd)[0:2] % 600` (range [9200, 9799])
@@ -64,4 +64,4 @@ Identical to remote mode — only port derivation and auth differ.
 
 ## Status
 
-**Implemented and active.** First-class feature, not experimental. See `src/h2c/home.mjs` for the implementation and `tests/test_home.mjs` for test coverage.
+**Implemented and active.** First-class feature, not experimental. See `src/hermes_to_claude/home.mjs` for the implementation and `tests/test_home.mjs` for test coverage.

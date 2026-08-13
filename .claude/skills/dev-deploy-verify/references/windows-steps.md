@@ -4,7 +4,7 @@
 
 ```powershell
 cd %TEMP%
-git clone https://github.com/xuhancn/hermes-claude-bridge.git h2c-verify
+git clone https://github.com/xuhancn/hermes-to-claude.git h2c-verify
 cd h2c-verify
 dir
 ```

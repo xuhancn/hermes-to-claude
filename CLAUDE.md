@@ -1,4 +1,4 @@
-# CLAUDE.md — hermes-claude-bridge
+# CLAUDE.md — hermes-to-claude
 
 ## 铁律 — 增量修改 only
 - 每个 PR 必须有详细 Description: 改了什么、为什么、怎么验证
@@ -12,7 +12,7 @@ npm install && npm run build
 ## Test
 - `node tests/test_bridge.mjs` — Bridge pool unit tests (46 assertions)
 - `node tests/test_e2e.mjs` — Full integration test w/ mock child (49 assertions)
-- `node src/h2c/transport/__tests__/run-all.mjs` — Transport layer tests (149 assertions)
+- `node src/hermes_to_claude/transport/__tests__/run-all.mjs` — Transport layer tests (149 assertions)
 - `node tests/test_persistence.mjs` — Task persistence tests (22 assertions)
 - `node tests/test_cli.mjs` — CLI argument parsing tests (12 assertions)
 - `for f in tests/test_*.mjs; do node "$f"; done` — Run all test files

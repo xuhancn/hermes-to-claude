@@ -13,10 +13,11 @@
 import { readState, writeState, markRunning, markStopped } from "../src/hermes_to_claude/state.mjs";
 import { homePort } from "../src/hermes_to_claude/home.mjs";
 import { unlinkSync, existsSync } from "fs";
-import { homedir } from "os";
+import { tmpdir } from "os";
 import { join } from "path";
 
-const STATE_FILE = join(homedir(), ".H2C_state.json");
+const STATE_FILE = join(tmpdir(), `h2c_test_state_${process.pid}.json`);
+process.env.H2C_STATE_FILE = STATE_FILE;
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
