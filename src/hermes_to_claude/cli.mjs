@@ -3,10 +3,13 @@ import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
+import { startStdinWatchdog } from "./orphan_watchdog.mjs";
 
 const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 let server = null;
 let statusBarInterval = null;
+let watchdog = null;
+let shuttingDown = false;
 
 function getLocalIPs() {
   return Object.values(networkInterfaces())
@@ -40,9 +43,38 @@ async function cmd_enable() {
 
   statusBarInterval = startStatusBar(port);
   process.stdin.resume();
+
+  // Orphan watchdog — exit when the launching Claude Code's pipe closes
+  // (stdin 'end'), so we don't keep holding the port. Disable with
+  // H2C_NO_AUTO_EXIT=1.
+  watchdog = startStdinWatchdog({ onExit: shutdownForOrphan });
+}
+
+// Released the port + state when the launching pipe closed (stdin 'end').
+function shutdownForOrphan(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  if (watchdog) watchdog.stop();
+  stopStatusBar(statusBarInterval);
+  process.stderr.write(`[h2c] launcher gone (${reason}) — shutting down\n`);
+  if (server) {
+    server.close(() => {
+      markStopped();
+      process.exit(0);
+    });
+    // Fallback: if close hangs, force exit after 1s
+    setTimeout(() => {
+      markStopped();
+      process.exit(0);
+    }, 1000);
+  } else {
+    markStopped();
+    process.exit(0);
+  }
 }
 
 function cmd_disable() {
+  if (watchdog) watchdog.stop();
   if (server) {
     server.close(() => {
       server = null;

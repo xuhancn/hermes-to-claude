@@ -15,6 +15,7 @@ npm install && npm run build
 - `node src/hermes_to_claude/transport/__tests__/run-all.mjs` — Transport layer tests (149 assertions)
 - `node tests/test_persistence.mjs` — Task persistence tests (22 assertions)
 - `node tests/test_cli.mjs` — CLI argument parsing tests (12 assertions)
+- `node tests/test_orphan_watchdog.mjs` — Orphan auto-exit watchdog tests (6 assertions)
 - `for f in tests/test_*.mjs; do node "$f"; done` — Run all test files
 - `curl http://127.0.0.1:9761/health` → `{"status":"ok"}`
 - `curl -X POST http://127.0.0.1:9761/v1/task/create -d '{"prompt":"hi"}'` → `{"task_id":"...","status":"created"}`
