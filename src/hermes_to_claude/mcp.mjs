@@ -23,9 +23,11 @@ function getLocalIPs() {
 // ─── Paths for status bar toggle ────────────────────────────────────────
 
 const distDir = dirname(fileURLToPath(import.meta.url));
-const H2C_STATUSLINE_CMD = `node ${join(distDir, "statusline.mjs")}`;
+const STATUSLINE_PATH = join(distDir, "statusline.mjs").replace(/\\/g, "/");
+const H2C_STATUSLINE_CMD = `node "${STATUSLINE_PATH}"`;
 const USER_SETTINGS = join(homedir(), ".claude", "settings.json");
 const USER_CMD_FILE = join(homedir(), ".h2c_user_statusline_cmd");
+const USER_STATUSLINE_FILE = join(homedir(), ".h2c_user_statusline.json");
 
 // ─── MCP server ─────────────────────────────────────────────────────────
 
@@ -166,22 +168,33 @@ function handleMcp(msg, key) {
 
       if (action === "on") {
         const currentCmd = settings.statusLine?.command || "";
-        // Save user's command (unless it's already h2c's wrapper)
+        // Save user's FULL statusLine object (unless it's already h2c's wrapper)
         if (currentCmd && !currentCmd.includes("statusline.mjs")) {
           mkdirSync(dirname(USER_CMD_FILE), { recursive: true });
+          writeFileSync(USER_STATUSLINE_FILE, JSON.stringify(settings.statusLine || {}, null, 2), "utf8");
           writeFileSync(USER_CMD_FILE, currentCmd, "utf8");
         }
-        settings.statusLine = { type: "command", command: H2C_STATUSLINE_CMD };
+        // Preserve existing fields (padding/refreshInterval/hideVimModeIndicator), only change type+command
+        settings.statusLine = {
+          ...(settings.statusLine || {}),
+          type: "command",
+          command: H2C_STATUSLINE_CMD,
+        };
         t = "h2c status bar ON — attached to your status bar";
       } else {
-        // Restore user's original command
-        if (existsSync(USER_CMD_FILE)) {
-          const userCmd = readFileSync(USER_CMD_FILE, "utf8").trim();
-          if (userCmd) {
-            settings.statusLine = { type: "command", command: userCmd };
-          } else {
+        // Restore user's FULL original object
+        if (existsSync(USER_STATUSLINE_FILE)) {
+          try {
+            const saved = JSON.parse(readFileSync(USER_STATUSLINE_FILE, "utf8"));
+            if (saved && Object.keys(saved).length > 0) {
+              settings.statusLine = saved;
+            } else {
+              delete settings.statusLine;
+            }
+          } catch {
             delete settings.statusLine;
           }
+          writeFileSync(USER_STATUSLINE_FILE, "", "utf8");
           writeFileSync(USER_CMD_FILE, "", "utf8");
         } else {
           delete settings.statusLine;
