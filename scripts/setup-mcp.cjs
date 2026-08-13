@@ -17,21 +17,28 @@ const USER_SKILL_DIR = path.join(
 
 try {
   // ---- statusLine hook (default ON — attaches to user's existing bar) ----
-  const STATUSBAR_PATH = path.join(__dirname, "..", "dist", "statusline.mjs");
-  const cmd = `node ${STATUSBAR_PATH}`;
+  const STATUSBAR_PATH = path.join(__dirname, "..", "dist", "statusline.mjs").replace(/\\/g, "/");
+  const cmd = `node "${STATUSBAR_PATH}"`;
   const USER_CMD_FILE = path.join(os.homedir(), ".h2c_user_statusline_cmd");
+  const USER_STATUSLINE_FILE = path.join(os.homedir(), ".h2c_user_statusline.json");
 
   let settings = {};
   if (fs.existsSync(USER_SETTINGS)) {
     settings = JSON.parse(fs.readFileSync(USER_SETTINGS, "utf8"));
   }
 
-  // Save existing user command so statusline.mjs can combine with it
+  // Save existing user's FULL statusLine object so it can be restored later
   if (settings.statusLine?.command && settings.statusLine.command !== cmd) {
     fs.mkdirSync(path.dirname(USER_CMD_FILE), { recursive: true });
+    fs.writeFileSync(USER_STATUSLINE_FILE, JSON.stringify(settings.statusLine || {}, null, 2), "utf8");
     fs.writeFileSync(USER_CMD_FILE, settings.statusLine.command, "utf8");
   }
-  settings.statusLine = { type: "command", command: cmd };
+  // Preserve existing fields (padding/refreshInterval/etc.), only change type+command
+  settings.statusLine = {
+    ...(settings.statusLine || {}),
+    type: "command",
+    command: cmd,
+  };
 
   fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
   fs.writeFileSync(USER_SETTINGS, JSON.stringify(settings, null, 2));
