@@ -16,7 +16,7 @@
  *
  * Output examples:
  *   ⏹️ h2c: off
- *   ▶️ h2c: on | :9761 | hermes-claude-bridge
+ *   ▶️ h2c: on | :9761 | hermes-to-claude
  */
 
 import { createHash } from "crypto";
