@@ -2,7 +2,7 @@
  * Bridge — session pool manager for parallel Claude Code tasks.
  *
  * Manages a pool of Session instances (each = one Claude Code child process).
- * Completed tasks are persisted to ~/.h2c_tasks.jsonl via persistence.mjs.
+ * Completed tasks are persisted to ~/.h2c/tasks.jsonl via persistence.mjs.
  *
  * Public API is backward-compatible with the old Bridge + BridgeManager.
  */

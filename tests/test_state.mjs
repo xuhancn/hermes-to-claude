@@ -4,7 +4,7 @@ import { writeFileSync, unlinkSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
-const STATE_FILE = join(homedir(), ".h2c_state.json");
+const STATE_FILE = join(homedir(), ".h2c", "state.json");
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
