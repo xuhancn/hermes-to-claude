@@ -117,7 +117,7 @@ function showHelp() {
     h2c status          Show status + last client connection
     h2c help            Show this help
 
-  Port is derived from the working directory; key is machine-global from ~/.h2c_key.
+  Port is derived from the working directory; key is machine-global from ~/.h2c/key.
   Home mode (H2C_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:

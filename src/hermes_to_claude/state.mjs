@@ -1,5 +1,5 @@
 /**
- * h2c shared state — persisted to ~/.h2c_state.json
+ * h2c shared state — persisted to ~/.h2c/state.json
  *
  * Written by:
  *   - server.mjs (on HTTP server start/stop)
@@ -14,11 +14,10 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { h2cFile } from "./paths.mjs";
 
 function stateFile() {
-  return process.env.H2C_STATE_FILE || join(homedir(), ".h2c_state.json");
+  return process.env.H2C_STATE_FILE || h2cFile(".h2c_state.json", "state.json");
 }
 
 const DEFAULT_STATE = {

@@ -22,9 +22,8 @@
 import { createHash } from "crypto";
 import http from "http";
 import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
 import { execSync } from "child_process";
+import { h2cFile } from "./paths.mjs";
 
 /** Deterministic port matching home.mjs homePort(). */
 function portFromCwd(cwd) {
@@ -55,7 +54,7 @@ async function main() {
   const hbStatus = alive ? `▶️ h2c: on | :${port} | ${lastDir}` : `⏹️ h2c: off`;
 
   // If user has a saved custom statusLine command, run it and attach h2c status
-  const userCmdFile = join(homedir(), ".h2c_user_statusline_cmd");
+  const userCmdFile = h2cFile(".h2c_user_statusline_cmd", "user_statusline_cmd");
   let userPart = "";
   if (existsSync(userCmdFile)) {
     try {
