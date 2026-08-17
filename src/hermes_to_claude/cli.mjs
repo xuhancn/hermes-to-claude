@@ -4,6 +4,7 @@ import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
 import { startStdinWatchdog } from "./orphan_watchdog.mjs";
+import { logEvent } from "./log.mjs";
 
 const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 let server = null;
@@ -40,6 +41,8 @@ async function cmd_enable() {
   });
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
+
+  logEvent("startup", { cwd, port, version: H2C_VERSION, pid: process.pid });
 
   statusBarInterval = startStatusBar(port);
   process.stdin.resume();

@@ -28,6 +28,8 @@
  * Set H2C_NO_AUTO_EXIT=1 to disable orphan detection entirely.
  */
 
+import { logEvent } from "./log.mjs";
+
 const STDIN_GRACE_MS = 360000;
 
 export function startStdinWatchdog({
@@ -48,11 +50,13 @@ export function startStdinWatchdog({
     if (exited) return;
     exited = true;
     stop();
+    logEvent("orphan_exit", { reason: "stdin-closed", uptimeMs: Date.now() - startedAt });
     onExit("stdin-closed");
   }
 
   function onEnd() {
     stdinEnded = true;
+    logEvent("stdin_end", { uptimeMs: Date.now() - startedAt });
     if (exited) return;
     const remaining = stdinGraceMs - (Date.now() - startedAt);
     if (remaining <= 0) {
