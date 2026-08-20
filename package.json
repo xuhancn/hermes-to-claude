@@ -22,7 +22,7 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/setup-mcp.cjs",
-    "test": "node src/hermes_to_claude/transport/__tests__/run-all.mjs && node tests/test_bridge.mjs && node tests/test_e2e.mjs"
+    "test": "node src/hermes_to_claude/transport/__tests__/run-all.mjs && node tests/test_bridge.mjs && node tests/test_e2e.mjs && node tests/test_claude_launcher.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

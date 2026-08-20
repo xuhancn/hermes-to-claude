@@ -314,7 +314,11 @@ async function main() {
   // ── Phase 14: Session timeout ──────────────────────────────
   group('Phase 14: Session timeout');
 
-  const s14 = new Session({ taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50 });
+  // Inject a stub launcher so the timeout test never touches the real fs/npx cache.
+  const s14 = new Session({
+    taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50,
+    resolveLaunchSpec: async () => ({ type: 'npx', pkgArg: '@anthropic-ai/claude-code' }),
+  });
   s14.start().catch(() => {});
   await sleep(300);
   // Timeout calls _failTask → status becomes "failed"
