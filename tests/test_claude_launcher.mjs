@@ -5,13 +5,16 @@
 // runInstall/npmViewVersions/installVersion), and spawn (never reached).
 //
 // Coverage:
-//   ① healthy native binary → no self-heal, no version query
-//   ② placeholder binary → layer-1 self-heal (node install.cjs)
+//   ① healthy native binary → no self-heal, no version query; spec PINNED to the
+//      verified cached version (never unpinned latest)
+//   ② placeholder binary → layer-1 self-heal (node install.cjs); healed → pinned npx spec
 //   ③ self-heal fails → version-enumeration fallback, picks the SECOND-NEWEST
 //      (versions[len-2], NOT slice(1))
 //   ④ every candidate fails → clear, actionable error
 //   ⑤ concurrent ensureClaudeBinary calls self-heal only once
 //   ⑥ H2C_CLAUDE_VERSION pin → no fallback, respects the pin
+//   ⑨ JS-entry release (bin → cli.js) is treated as HEALTHY (exists & non-empty)
+//   ⑩ healthy JS-entry npx cache → pinned npx spec, no false self-heal
 //
 // Run via: node tests/test_claude_launcher.mjs
 
@@ -153,6 +156,14 @@ async function main() {
 
   assert(quoteArg("plain") === "plain", "quoteArg: no spaces → bare");
   assert(quoteArg("a b") === '"a b"', "quoteArg: spaces → quoted");
+  assert(quoteArg("a&b") === '"a&b"', "quoteArg: & → quoted");
+  assert(quoteArg("a|b") === '"a|b"', "quoteArg: | → quoted");
+  assert(quoteArg("a<b") === '"a<b"', "quoteArg: < → quoted");
+  assert(quoteArg("a>b") === '"a>b"', "quoteArg: > → quoted");
+  assert(quoteArg("a^b") === '"a^b"', "quoteArg: ^ → quoted");
+  assert(quoteArg("(a)b") === '"(a)b"', "quoteArg: ( ) → quoted");
+  assert(buildCmdLine(["npm", "i", "pkg@1&2", "x|y"]) === 'npm i "pkg@1&2" "x|y"',
+    "buildCmdLine quotes cmd metacharacters");
   assert(buildCmdLine(["a", "b c", "d"]) === 'a "b c" d', "buildCmdLine quotes only as needed");
 
   // ── ① healthy binary → no self-heal, no version query ──────────
@@ -161,8 +172,9 @@ async function main() {
     const io = makeFakeIO();
     io.setFile(binPath(npxPkgDir()), BIG);
     const spec = await ensureClaudeBinary({ env: {}, io, cache: createDetectionCache(), mutex: createMutex() });
-    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code",
-      "healthy → npx spec for latest");
+    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code@2.1.237",
+      "healthy → npx spec pinned to the verified cached version (not unpinned latest)");
+    assert(spec.version === "2.1.237", "healthy → spec carries the pinned version");
     assert(io.calls.runInstall === 0, "healthy → no install.cjs run");
     assert(io.calls.npmView === 0, "healthy → no npm view");
     assert(io.calls.installVersion.length === 0, "healthy → no fallback installs");
@@ -180,8 +192,9 @@ async function main() {
     const spec = await ensureClaudeBinary({ env: {}, io: io2, cache: createDetectionCache(), mutex: createMutex() });
     assert(healed, "placeholder → install.cjs ran");
     assert(io2.calls.runInstall === 1, "exactly one self-heal attempt on success");
-    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code",
-      "healed → still spawns latest via npx");
+    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code@2.1.237",
+      "healed → spawns the healed cached version via npx (pinned, not latest)");
+    assert(spec.version === "2.1.237", "healed → spec carries the healed version");
     assert(io2.calls.npmView === 0, "self-heal success → no fallback enumeration");
     assert(io2.calls.installVersion.length === 0, "self-heal success → no fallback installs");
   }
@@ -251,6 +264,8 @@ async function main() {
     ]);
     assert(healCount === 1, `two concurrent spawns → install.cjs ran once (got ${healCount})`);
     assert(specA.type === "npx" && specB.type === "npx", "both callers got a usable npx spec");
+    assert(specA.pkgArg === "@anthropic-ai/claude-code@2.1.237",
+      "concurrent → healed cache version pinned in the spec");
   }
 
   // ── ⑥ pinned version → no fallback ────────────────────────────
@@ -338,6 +353,56 @@ async function main() {
 
     assert(spec.type === "direct" && spec.version === "1.0.2",
       `lock write failed but healthy fallback v1.0.2 still used (got ${spec.version})`);
+  }
+
+  // ── ⑨ JS-entry release (old package.json#bin → cli.js) counts as healthy ──
+  console.log("-- ⑨ JS-entry release → healthy via package.json#bin (no native binary) --");
+  {
+    const pkg100 = path.join(FALLBACK_ROOT, "1.0.0");
+    let io;
+    io = makeFakeIO({
+      npxVersion: "1.0.3", // broken current release in the npx cache
+      runInstall: async () => { throw Object.assign(new Error("npm ERR! code E404"), { code: "E404" }); },
+      npmViewVersions: async () => ["1.0.0", "1.0.1", "1.0.2", "1.0.3"],
+      readJson: async (p) => {
+        if (p.endsWith("package.json") && p.startsWith(pkg100 + path.sep)) {
+          return { version: "1.0.0", bin: { claude: "cli.js" } }; // old JS-entry release
+        }
+        // fall through to the default readJson
+      },
+    });
+    io.setFile(binPath(npxPkgDir()), STUB);                 // current release broken
+    io.setFile(path.join(fallbackPkgDir("1.0.0"), "cli.js"), 1024); // JS entry exists & non-empty
+
+    const spec = await ensureClaudeBinary({ env: {}, io, cache: createDetectionCache(), mutex: createMutex() });
+
+    assert(spec.type === "direct" && spec.version === "1.0.0",
+      `fallback selects the JS-entry release, not skipped as broken (got ${spec.version})`);
+    assert(spec.entryKind === "node", "JS-entry release → node entryKind");
+    assert(spec.entry.includes("cli.js"), "direct entry points at the JS bin file");
+    const lockWrite = io.calls.writes.find((w) => w.p.endsWith("lock.json"));
+    assert(lockWrite && lockWrite.obj.version === "1.0.0", "fallback lock written for the JS-entry v1.0.0");
+  }
+
+  // ── ⑩ healthy JS-entry package in the npx cache → pinned npx spec ──
+  console.log("-- ⑩ healthy JS-entry npx cache → pinned npx spec, no self-heal --");
+  {
+    const io = makeFakeIO({
+      readJson: async (p) => {
+        if (p.endsWith("package.json") && p.includes(`@anthropic-ai${path.sep}claude-code`)) {
+          return { version: "1.0.0", bin: { claude: "cli.js" } }; // old JS-entry release
+        }
+        // fall through to the default readJson
+      },
+    });
+    io.setFile(path.join(npxPkgDir(), "cli.js"), 2048); // JS entry exists & non-empty
+
+    const spec = await ensureClaudeBinary({ env: {}, io, cache: createDetectionCache(), mutex: createMutex() });
+
+    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code@1.0.0",
+      "healthy JS-entry cached package → pinned npx spec (no false 'broken' fallback)");
+    assert(io.calls.runInstall === 0, "JS-entry healthy → no self-heal triggered");
+    assert(io.calls.npmView === 0, "JS-entry healthy → no version fallback enumeration");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

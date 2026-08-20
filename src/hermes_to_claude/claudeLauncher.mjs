@@ -11,8 +11,10 @@
  *   1. Integrity check (fs.stat, < 4KB = placeholder) with a short (~30s) cache.
  *   2. Self-heal: re-run the package's own install.cjs with backoff retries.
  *   3. Version fallback: enumerate previous releases (newest → oldest), install
- *      + check each, lock the first complete one. No version pinning — we always
- *      follow the latest *healthy* release.
+ *      + check each, lock the first complete one. We always follow the latest
+ *      *healthy* release — and pin the npx spawn to that exact cached version,
+ *      so a newer broken release that hasn't reached the cache yet is never
+ *      pulled at spawn time.
  *
  * The npm `versions --json` list is in publish order (old → new), so "second
  * newest" is `versions[len - 2]` — never `slice(1)` (that's the second oldest).
@@ -152,7 +154,9 @@ export function createDetectionCache({ ttlMs = DETECTION_CACHE_TTL_MS, now = () 
 /** Quote a single shell arg (cmd.exe / POSIX) — only when it actually needs it. */
 export function quoteArg(a) {
   const s = String(a);
-  return /[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+  // cmd.exe metacharacters (& | < > ^ ( ) %) would break or hijack the command
+  // line built for `cmd.exe /c`, so any of them triggers quoting too.
+  return /[\s"&|<>^()%]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
 }
 
 export function buildCmdLine(args) {
@@ -251,8 +255,8 @@ function execNpm(io, args, opts) {
 
 /**
  * What Session should spawn.
- *  - { type: "npx", pkgArg: "@anthropic-ai/claude-code" }            → npx (latest, healed)
- *  - { type: "npx", pkgArg: "@anthropic-ai/claude-code@1.2.3" }      → npx (pinned)
+ *  - { type: "npx", pkgArg: "@anthropic-ai/claude-code@<verified-cache-ver>" } → npx, pinned to the cached version that passed integrity (healed)
+ *  - { type: "npx", pkgArg: "@anthropic-ai/claude-code@1.2.3" }      → npx (explicit pin)
  *  - { type: "direct", entry, entryKind: "node"|"native" }           → node <entry> / <entry>
  */
 
@@ -319,7 +323,7 @@ async function resolveClaudeSpec({ io, env, pinned, lockRecheckMs }) {
   // Step 2: integrity check (before spawn).
   if (await isBinaryHealthy(pkgDir, io)) {
     await io.remove(io.lockMarkerPath); // latest is healthy — no fallback lock needed
-    return { type: "npx", pkgArg: PKG_NAME };
+    return healthyNpxSpec(io, pkgDir);
   }
   io.log(`claude native binary placeholder in ${pkgDir}`);
 
@@ -340,7 +344,7 @@ async function resolveClaudeSpec({ io, env, pinned, lockRecheckMs }) {
   if (healed && (await isBinaryHealthy(pkgDir, io))) {
     io.log("self-heal ok — native binary repaired");
     await io.remove(io.lockMarkerPath);
-    return { type: "npx", pkgArg: PKG_NAME };
+    return healthyNpxSpec(io, pkgDir);
   }
 
   // Step 4: version fallback (newest previous release with a complete binary).
@@ -507,8 +511,25 @@ async function lockedSpec(io, version) {
   return null;
 }
 
-/** A real (non-placeholder) native binary exists under bin/claude[.exe]. */
+/**
+ * The package is healthy when the file its `bin` field points at is usable:
+ *  - JS entry (.js/.cjs/.mjs — older releases run via node): file exists & non-empty.
+ *  - native entry: a real binary, size >= PLACEHOLDER_MAX_BYTES (not a stub).
+ * Falls back to the conventional bin/claude[.exe] names when `bin` is absent,
+ * mirroring directSpec() so a health check never disagrees with the spawn spec.
+ */
 async function isBinaryHealthy(pkgDir, io) {
+  const pkg = await io.readJson(path.join(pkgDir, "package.json"));
+  const bin = pkg?.bin;
+  const binPath = typeof bin === "string" ? bin : bin && typeof bin === "object" ? bin.claude : null;
+
+  if (binPath) {
+    const st = await io.stat(path.join(pkgDir, binPath));
+    if (!st || !st.isFile) return false;
+    if (/\.(js|cjs|mjs)$/.test(binPath)) return st.size > 0; // JS entry: non-empty is healthy
+    return !isPlaceholderSize(st.size); // native entry: must not be a stub
+  }
+
   for (const name of BIN_NAMES) {
     const st = await io.stat(path.join(pkgDir, "bin", name));
     if (st && st.isFile && !isPlaceholderSize(st.size)) return true;
@@ -520,6 +541,18 @@ async function isBinaryHealthy(pkgDir, io) {
 async function pkgVersion(io, pkgDir) {
   const pkg = await io.readJson(path.join(pkgDir, "package.json"));
   return pkg?.version || null;
+}
+
+/**
+ * npx spec pinned to the exact cached version that just passed the integrity
+ * check. An unpinned "@anthropic-ai/claude-code" re-resolves to `latest` at
+ * spawn time, which could pull a newer broken release not yet in the cache.
+ */
+async function healthyNpxSpec(io, pkgDir) {
+  const version = await pkgVersion(io, pkgDir);
+  return version
+    ? { type: "npx", pkgArg: `${PKG_NAME}@${version}`, version }
+    : { type: "npx", pkgArg: PKG_NAME };
 }
 
 /** Highest-version claude-code package dir in the npx cache (mtime tie-break). */
