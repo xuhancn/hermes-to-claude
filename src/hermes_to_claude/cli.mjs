@@ -3,7 +3,8 @@ import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
 import { isHome, homePort, homeKey } from "./home.mjs";
-import { startStdinWatchdog } from "./orphan_watchdog.mjs";
+import { startOrphanWatchdog } from "./orphan_watchdog.mjs";
+import { logEvent } from "./log.mjs";
 
 const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 let server = null;
@@ -41,16 +42,17 @@ async function cmd_enable() {
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
 
+  logEvent("startup", { cwd, port, version: H2C_VERSION, pid: process.pid });
+
   statusBarInterval = startStatusBar(port);
   process.stdin.resume();
 
-  // Orphan watchdog — exit when the launching Claude Code's pipe closes
-  // (stdin 'end'), so we don't keep holding the port. Disable with
-  // H2C_NO_AUTO_EXIT=1.
-  watchdog = startStdinWatchdog({ onExit: shutdownForOrphan });
+  // Orphan watchdog — exit when the launching Claude Code process dies, so we
+  // don't keep holding the port. Disable with H2C_NO_AUTO_EXIT=1.
+  watchdog = startOrphanWatchdog({ onExit: shutdownForOrphan });
 }
 
-// Released the port + state when the launching pipe closed (stdin 'end').
+// Released the port + state when the launching Claude Code process died.
 function shutdownForOrphan(reason) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -117,7 +119,7 @@ function showHelp() {
     h2c status          Show status + last client connection
     h2c help            Show this help
 
-  Port is derived from the working directory; key is machine-global from ~/.h2c_key.
+  Port is derived from the working directory; key is machine-global from ~/.h2c/key.
   Home mode (H2C_HOME=1) skips auth; remote mode enforces key.
 
   EXAMPLES:

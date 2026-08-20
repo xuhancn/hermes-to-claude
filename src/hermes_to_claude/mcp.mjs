@@ -6,6 +6,7 @@ import { Bridge } from "./bridge.mjs";
 import { markRunning, markStopped, readState, writeState } from "./state.mjs";
 import { homePort, homeKey } from "./home.mjs";
 import { createServer } from "./server.mjs";
+import { h2cFile } from "./paths.mjs";
 
 const H2C_VERSION = globalThis.H2C_VERSION || "v0.0.0-dev";
 
@@ -26,8 +27,8 @@ const distDir = dirname(fileURLToPath(import.meta.url));
 const STATUSLINE_PATH = join(distDir, "statusline.mjs").replace(/\\/g, "/");
 const H2C_STATUSLINE_CMD = `node "${STATUSLINE_PATH}"`;
 const USER_SETTINGS = join(homedir(), ".claude", "settings.json");
-const USER_CMD_FILE = join(homedir(), ".h2c_user_statusline_cmd");
-const USER_STATUSLINE_FILE = join(homedir(), ".h2c_user_statusline.json");
+const USER_CMD_FILE = h2cFile(".h2c_user_statusline_cmd", "user_statusline_cmd");
+const USER_STATUSLINE_FILE = h2cFile(".h2c_user_statusline.json", "user_statusline.json");
 
 // ─── MCP server ─────────────────────────────────────────────────────────
 

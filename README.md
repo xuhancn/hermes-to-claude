@@ -73,7 +73,7 @@ This starts the HTTP server. The port is derived from the working directory (see
 h2c runs as a background process launched from inside Claude Code. When Claude Code exits, h2c would otherwise be left as an orphan holding the port. To prevent this, h2c watches its own stdin — when the launching Claude Code exits, the pipe closes and h2c shuts itself down, releasing the port.
 
 - **Grace period**: 360 seconds (6 minutes) — within this window h2c stays alive so Hermes-Agent can connect; once it elapses, orphan cleanup fires.
-- **Disable**: set  to keep h2c running indefinitely (e.g. from a terminal).
+- **Disable**: set `H2C_NO_AUTO_EXIT=1` to keep h2c running indefinitely (e.g. from a terminal).
 
 ### Home Mode — For Headless Machines
 

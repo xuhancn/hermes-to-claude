@@ -5,7 +5,7 @@
  *   - No authentication
  *   - Port derived deterministically from the working directory
  *     (9200 + MD5(cwd)[0:2] % 600 → range [9200, 9799])
- *   - Key: random base52, stored in ~/.h2c_key (machine-global)
+ *   - Key: random base52, stored in ~/.h2c/key (machine-global)
  *   - Auto-starts without --enable flag
  *
  * Port is derived deterministically from cwd. Key is random and
@@ -14,11 +14,10 @@
 
 import { createHash, randomBytes } from "crypto";
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { h2cFile } from "./paths.mjs";
 
 const BASE52 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const KEY_FILE = join(homedir(), ".h2c_key");
+const KEY_FILE = h2cFile(".h2c_key", "key");
 
 /** True when H2C_HOME env var is exactly "1". */
 export function isHome() {
@@ -38,7 +37,7 @@ export function homePort(cwd) {
 /**
  * Key for this machine.
  *
- * Returns the random base52 key from ~/.h2c_key. If the file
+ * Returns the random base52 key from ~/.h2c/key. If the file
  * is missing, empty, or contains an invalid key, generates a new
  * random key and saves it. Same key for all directories on one machine.
  *

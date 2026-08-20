@@ -1,7 +1,8 @@
 import { createServer as http } from "http";
 import { Bridge } from "./bridge.mjs";
-import { incrementTasks, writeState } from "./state.mjs";
+import { incrementTasks, readState, writeState } from "./state.mjs";
 import { isHome } from "./home.mjs";
+import { logEvent } from "./log.mjs";
 
 let taskCount = 0, startTime = Date.now();
 
@@ -32,6 +33,9 @@ export function createServer(expectedKey, bridge = new Bridge()) {
 
     // Track connection info
     const clientIP = req.socket.remoteAddress?.replace(/^::ffff:/, "") || "unknown";
+    if (clientIP !== readState().lastClientIP) {
+      logEvent("client_connect", { ip: clientIP });
+    }
     writeState({ lastClientIP: clientIP, lastActiveAt: Date.now() });
 
     const isPost = req.method === "POST";

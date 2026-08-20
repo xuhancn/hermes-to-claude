@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
 import * as esbuild from 'esbuild'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -6,10 +7,10 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SRC_DIR = path.resolve(__dirname, 'src')
 
-// Generate version from git
-const count = execSync("git rev-list --count HEAD", { encoding: "utf8" }).trim();
+// Generate version from package.json semver + git hash
 const hash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
-const H2C_VERSION = `v${count}.0.${hash}`;
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
+const H2C_VERSION = `v${pkg.version}+${hash}`;
 console.log(`✓ version ${H2C_VERSION}`);
 
 // Build h2c CLI (dist/h2c.mjs)
