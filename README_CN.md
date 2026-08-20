@@ -93,6 +93,21 @@ $env:H2C_HOME = "1"
 
 Home 模式下服务器仅监听 `127.0.0.1`，**无需认证** — 只有本机进程能访问，安全无忧。
 
+### Claude Code 二进制自愈
+
+h2c 通过 `npx @anthropic-ai/claude-code` 为每个任务启动 Claude Code。若 Anthropic 发布**不完整版本**（npm 包里的原生二进制是极小的占位 stub —— 例如 2.1.237 win32 包 404），进程会在启动瞬间以 `exit code 1` 崩溃。h2c 现在会在 spawn **之前**检测并自愈：
+
+1. **检测** — npx 缓存里 `bin/claude[.exe]` 小于 4KB（包自身判定 stub 的大小）即占位文件。结果缓存约 30 秒。
+2. **自愈** — 重跑该包的 `install.cjs`，带退避重试（2s/4s）。
+3. **回退** — 若最新版确实损坏，安装携带完整二进制的最新*前一个*版本并锁定（每 6 小时自动重查最新版）。**不做版本固定** — h2c 始终跟随最新健康版本。
+
+可选环境变量：
+
+| 变量 | 含义 |
+|----------|---------|
+| `H2C_CLAUDE_VERSION` | 固定特定 Claude Code 版本（`npx @anthropic-ai/claude-code@<version>`）。设置后 h2c 永不回退到其它版本 — 固定版本损坏会给出明确错误。 |
+| `H2C_CACHE_DIR` | 覆盖回退安装目录（默认 `~/.cache/hermes-to-claude/claude-code`）。 |
+
 ### 认证与端口
 
 端口由工作目录**确定**：`MD5(cwd)` → 前 2 字节 → `9200 + (值 % 600)`。每个项目目录有独立端口。这是故意的设计：
