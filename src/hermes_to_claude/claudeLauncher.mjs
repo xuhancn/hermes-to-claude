@@ -398,7 +398,11 @@ async function installLatestFresh({ io }) {
   } catch (err) {
     if (classifyInstallError(err) === "network") {
       io.log("transient network error on fresh install — one retry");
-      await io.installVersion(latest, destDir);
+      try {
+        await io.installVersion(latest, destDir);
+      } catch (err2) {
+        io.log(`retry failed: ${err2.message}`);
+      }
     }
   }
   if (await isBinaryHealthy(pkgDir, io)) {
@@ -490,7 +494,11 @@ async function readLock(io) {
 }
 
 async function lock(io, version) {
-  await io.writeJson(io.lockMarkerPath, { version, lockedAt: io.now() });
+  try {
+    await io.writeJson(io.lockMarkerPath, { version, lockedAt: io.now() });
+  } catch (err) {
+    io.log(`warning: could not write fallback lock: ${err.message}`);
+  }
 }
 
 async function lockedSpec(io, version) {

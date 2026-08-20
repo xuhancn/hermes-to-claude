@@ -207,7 +207,7 @@ async function main() {
     assert(io.calls.installVersion[0] === "1.0.2",
       `fallback installs second-newest FIRST (got ${io.calls.installVersion[0]} — slice(1) would be 1.0.1)`);
     assert(spec.type === "direct", "locked fallback → direct spawn spec");
-    assert(spec.entry.includes(`/claude-code/1.0.2/`), `direct entry points at locked v1.0.2 (${spec.entry})`);
+    assert(spec.entry.includes(`claude-code${path.sep}1.0.2${path.sep}`), `direct entry points at locked v1.0.2 (${spec.entry})`);
     assert(spec.entryKind === "native", "new-structure package → native binary entry");
 
     const lockWrite = io.calls.writes.find((w) => w.p.endsWith("lock.json"));
@@ -293,6 +293,51 @@ async function main() {
     await ensureClaudeBinary({ env: {}, io, cache, mutex });
     const scansAfter = io.calls.runInstall + io.calls.npmView + io.calls.installVersion.length;
     assert(scansAfter === scansBefore, "cached decision → no re-scan/re-heal within TTL");
+  }
+
+  // ── ⑦ fresh-install network error + retry also fails → no throw, fallback ──
+  console.log("-- ⑦ fresh install network error (retry also fails) → fallback --");
+  {
+    let io;
+    io = makeFakeIO({
+      hashes: [], // nothing in npx cache → installLatestFresh
+      npmViewVersions: async () => ["1.0.0", "1.0.1", "1.0.2", "1.0.3"],
+      installVersion: async () => {
+        // the fake io already records the call; only fail here
+        throw Object.assign(new Error("getaddrinfo ENOTFOUND registry.npmjs.org"), { code: "ENOTFOUND" });
+      },
+    });
+    // v1.0.2 already healthy in the fallback root → versionFallback locks it.
+    io.setFile(binPath(fallbackPkgDir("1.0.2")), BIG);
+
+    const spec = await ensureClaudeBinary({ env: {}, io, cache: createDetectionCache(), mutex: createMutex() });
+
+    // Retry is attempted and its failure is swallowed (no throw from ensureClaudeBinary),
+    // falling through to the isBinaryHealthy check → versionFallback.
+    assert(JSON.stringify(io.calls.installVersion) === JSON.stringify(["1.0.3", "1.0.3"]),
+      `fresh install + one retry both attempted (got ${JSON.stringify(io.calls.installVersion)})`);
+    assert(spec.type === "direct" && spec.version === "1.0.2",
+      `no throw → fell through to healthy fallback v1.0.2 (got ${spec.version})`);
+    const lockWrite = io.calls.writes.find((w) => w.p.endsWith("lock.json"));
+    assert(lockWrite && lockWrite.obj.version === "1.0.2", "fallback lock written for v1.0.2");
+  }
+
+  // ── ⑧ lock.json write failure → fallback still proceeds ──────────
+  console.log("-- ⑧ lock.json write failure → fallback proceeds --");
+  {
+    const io = makeFakeIO({
+      npxVersion: "1.0.3", // broken release currently in the npx cache
+      runInstall: async () => { throw Object.assign(new Error("npm ERR! code E404"), { code: "E404" }); },
+      npmViewVersions: async () => ["1.0.0", "1.0.1", "1.0.2", "1.0.3"],
+      writeJson: async () => { throw new Error("ENOSPC: no space left on device"); },
+    });
+    io.setFile(binPath(npxPkgDir()), STUB);               // current release broken
+    io.setFile(binPath(fallbackPkgDir("1.0.2")), BIG);     // healthy fallback candidate
+
+    const spec = await ensureClaudeBinary({ env: {}, io, cache: createDetectionCache(), mutex: createMutex() });
+
+    assert(spec.type === "direct" && spec.version === "1.0.2",
+      `lock write failed but healthy fallback v1.0.2 still used (got ${spec.version})`);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
