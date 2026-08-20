@@ -24,6 +24,33 @@ No `--sdk-url` or `--session-id` in the `stream-json` spawn mode — those are f
 | Windows | `cmd.exe /d /s /c npx.cmd ...` | ✅ |
 | macOS | same as Linux | ✅ |
 
+## Release Integrity — Detect → Self-Heal → Fallback
+
+A broken Claude Code release (native binary shipped as a tiny placeholder stub) crashes
+every spawn with `exit code 1`. Before spawning, `Session` consults
+`claudeLauncher.mjs` (`ensureClaudeBinary`), which runs three layers:
+
+1. **Detect** — `bin/claude[.exe]` in the npx cache
+   (`~/.npm/_npx/<hash>/node_modules/@anthropic-ai/claude-code/`) is stat'd.
+   A file `< 4KB` (or missing) is a placeholder. The verdict is cached ~30s.
+2. **Self-heal** — re-runs `node install.cjs` in the package dir, with backoff
+   retries (2s/4s). A 404/`ETARGET` aborts retrying immediately (the release is
+   incomplete — retrying won't help); a network error retries.
+3. **Fallback** — `npm view @anthropic-ai/claude-code versions --json` returns
+   publish order (old → new). Candidates iterate **newest → oldest**, excluding
+   the broken release: `versions[len - 2]` first — **never `slice(1)`** (that's
+   the second *oldest*). Each candidate is installed to `~/.cache/hermes-to-claude/
+   claude-code/<version>` and verified; the first complete one is locked and
+   spawned directly (`node <pkg>/cli.js` for old packages, `<pkg>/bin/claude[.exe]`
+   native for new ones). The lock is re-checked against the latest release every 6h.
+
+Concurrency: heal/fallback runs under a process-internal mutex, so parallel tasks
+that all observe the placeholder wait for one repair instead of racing.
+
+Respecting user intent: when `H2C_CLAUDE_VERSION` is set, the flow installs/heals
+that exact version but **never** falls back to a different version — a broken pin
+surfaces a clear, actionable error instead of silently downgrading.
+
 ## stdin Message Format (NDJSON)
 
 One line per message:
