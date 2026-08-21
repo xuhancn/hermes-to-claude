@@ -92,6 +92,21 @@ $env:H2C_HOME = "1"
 
 With Home mode active, the server listens on `127.0.0.1` only. Authentication is **disabled** — safe because only local processes can reach it. Hermes-Agent connects without managing keys.
 
+### Claude Code Binary Resilience
+
+h2c spawns Claude Code per task via `npx @anthropic-ai/claude-code`. If Anthropic ships an **incomplete release** (the native binary in the npm tarball is a tiny placeholder stub — e.g. the 2.1.237 win32 package 404), the process would crash instantly with `exit code 1`. h2c now detects this **before** spawning and self-heals:
+
+1. **Detect** — `bin/claude[.exe]` smaller than 4KB (the package's own stub size) = placeholder. Result cached ~30s.
+2. **Self-heal** — re-runs the package's `install.cjs` with backoff retries (2s/4s).
+3. **Fallback** — if the latest release is genuinely broken, installs the newest *previous* release that ships a complete binary and locks it (auto re-checks latest every 6h). **No version pinning** — h2c always follows the latest healthy release.
+
+Optional environment variables:
+
+| Variable | Meaning |
+|----------|---------|
+| `H2C_CLAUDE_VERSION` | Pin a specific Claude Code version (`npx @anthropic-ai/claude-code@<version>`). When set, h2c never falls back to another version — a broken pin surfaces a clear error. |
+| `H2C_CACHE_DIR` | Override the fallback install dir (default `~/.cache/hermes-to-claude/claude-code`). |
+
 ### Authentication and Port
 
 The port is **deterministic**: `MD5(cwd)` → first 2 bytes → `9200 + (value % 600)`. Each project directory gets its own port. This is intentional:

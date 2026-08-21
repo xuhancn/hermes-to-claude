@@ -314,7 +314,11 @@ async function main() {
   // ── Phase 14: Session timeout ──────────────────────────────
   group('Phase 14: Session timeout');
 
-  const s14 = new Session({ taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50 });
+  // Stub only the pre-spawn launch-spec resolution (skips real fs/npm detection) so the 50ms timeout fires fast; the Session below still spawns npx.
+  const s14 = new Session({
+    taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50,
+    resolveLaunchSpec: async () => ({ type: 'npx', pkgArg: '@anthropic-ai/claude-code' }),
+  });
   s14.start().catch(() => {});
   await sleep(300);
   // Timeout calls _failTask → status becomes "failed"

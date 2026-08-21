@@ -12,8 +12,14 @@
 import { spawn } from "child_process";
 import { StdioTransport } from "./transport/StdioTransport.mjs";
 import { BoundedUUIDSet } from "./bridgeMessaging.mjs";
+import { ensureClaudeBinary, quoteArg } from "./claudeLauncher.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Default launcher: detect a broken claude native binary, self-heal, and as a
+// last resort lock a previous release (see claudeLauncher.mjs). Injectable so
+// tests can stub the filesystem/npm side effects.
+const defaultResolveLaunchSpec = (env) => ensureClaudeBinary({ env });
 
 
 const DEFAULT_TASK_TIMEOUT_MS = 0; // 0 = no timeout (opt-in via taskTimeoutMs)
@@ -31,6 +37,7 @@ export class Session {
    * @param {"bypass"|"approve"} [opts.permissionMode]
    * @param {(session: Session) => void} [opts.onComplete]
    * @param {(session: Session, reason: string) => void} [opts.onError]
+   * @param {(env: object) => Promise<{type: string, pkgArg?: string, entry?: string, entryKind?: string}>} [opts.resolveLaunchSpec]
    */
   constructor(opts = {}) {
     this.taskId = opts.taskId || "unknown";
@@ -48,6 +55,7 @@ export class Session {
     this._permissionMode = opts.permissionMode ?? DEFAULT_PERMISSION_MODE;
     this._onComplete = opts.onComplete || null;
     this._onError = opts.onError || null;
+    this._resolveLaunchSpec = opts.resolveLaunchSpec || defaultResolveLaunchSpec;
 
     // Child process + transport
     this.child = null;
@@ -102,7 +110,6 @@ export class Session {
     const cwd = this._cwd || process.cwd();
     const isWin = process.platform === "win32";
     const claudeArgs = [
-      "@anthropic-ai/claude-code",
       "--print",
       "--input-format", "stream-json",
       "--output-format", "stream-json",
@@ -110,14 +117,40 @@ export class Session {
     ];
     if (this._skipPermissions) claudeArgs.push("--dangerously-skip-permissions");
 
+    // Resolve what to spawn. This detects a broken claude native binary
+    // (placeholder stub from an incomplete release), re-runs install.cjs to
+    // self-heal, and as a last resort locks a previous release — see
+    // claudeLauncher.mjs. Never falls back when H2C_CLAUDE_VERSION is pinned.
+    let launch;
     try {
+      launch = await this._resolveLaunchSpec(process.env);
+    } catch (err) {
+      process.stderr.write(`[session] ${this.taskId}: claude unavailable: ${err.message}\n`);
+      this.status = "failed";
+      this.result = err.message;
+      this.exitCode = 1;
+      this._notifyError(err.message);
+      return { task_id: this.taskId, status: "failed" };
+    }
+
+    let cmd, args;
+    if (launch.type === "direct") {
+      // Fallback/pinned release — spawn the resolved entry directly (native
+      // binary, or node <cli.js> for older packages). No cmd.exe wrapper needed.
+      cmd = launch.entryKind === "node" ? process.execPath : launch.entry;
+      args = launch.entryKind === "node" ? [launch.entry, ...claudeArgs] : [...claudeArgs];
+    } else {
+      const pkgArg = launch.pkgArg; // "@anthropic-ai/claude-code" or "@anthropic-ai/claude-code@1.2.3"
       // cwd passed as spawn option so Claude CLI + its tools inherit correct dir.
       // (Inline `cd /d "<cwd>"` was avoided: quoted backslash paths break cmd.exe
       //  with "filename syntax incorrect" on Windows — see repro in PR review.)
-      const cmd = isWin ? "cmd.exe" : "npx";
-      const args = isWin
-        ? ["/d", "/s", "/c", `npx.cmd ${claudeArgs.join(" ")}`]
-        : claudeArgs;
+      cmd = isWin ? "cmd.exe" : "npx";
+      args = isWin
+        ? ["/d", "/s", "/c", `npx.cmd ${[pkgArg, ...claudeArgs].map(quoteArg).join(" ")}`]
+        : [pkgArg, ...claudeArgs];
+    }
+
+    try {
       this.child = spawn(cmd, args, {
         stdio: ["pipe", "pipe", "pipe"],
         cwd,
