@@ -12,7 +12,7 @@
 import { spawn } from "child_process";
 import { StdioTransport } from "./transport/StdioTransport.mjs";
 import { BoundedUUIDSet } from "./bridgeMessaging.mjs";
-import { ensureClaudeBinary } from "./claudeLauncher.mjs";
+import { ensureClaudeBinary, quoteArg } from "./claudeLauncher.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -146,7 +146,7 @@ export class Session {
       //  with "filename syntax incorrect" on Windows — see repro in PR review.)
       cmd = isWin ? "cmd.exe" : "npx";
       args = isWin
-        ? ["/d", "/s", "/c", `npx.cmd ${[pkgArg, ...claudeArgs].join(" ")}`]
+        ? ["/d", "/s", "/c", `npx.cmd ${[pkgArg, ...claudeArgs].map(quoteArg).join(" ")}`]
         : [pkgArg, ...claudeArgs];
     }
 

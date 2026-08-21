@@ -314,7 +314,7 @@ async function main() {
   // ── Phase 14: Session timeout ──────────────────────────────
   group('Phase 14: Session timeout');
 
-  // Inject a stub launcher so the timeout test never touches the real fs/npx cache.
+  // Stub only the pre-spawn launch-spec resolution (skips real fs/npm detection) so the 50ms timeout fires fast; the Session below still spawns npx.
   const s14 = new Session({
     taskId: 't-timeout', prompt: 'timeout test', taskTimeoutMs: 50,
     resolveLaunchSpec: async () => ({ type: 'npx', pkgArg: '@anthropic-ai/claude-code' }),

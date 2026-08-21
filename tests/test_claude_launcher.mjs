@@ -162,6 +162,8 @@ async function main() {
   assert(quoteArg("a>b") === '"a>b"', "quoteArg: > → quoted");
   assert(quoteArg("a^b") === '"a^b"', "quoteArg: ^ → quoted");
   assert(quoteArg("(a)b") === '"(a)b"', "quoteArg: ( ) → quoted");
+  assert(quoteArg("a%b") === "a%%b", "quoteArg: % → %% escaped (cmd.exe %VAR% expansion)");
+  assert(quoteArg("%PATH%") === "%%PATH%%", "quoteArg: %VAR% escaped");
   assert(buildCmdLine(["npm", "i", "pkg@1&2", "x|y"]) === 'npm i "pkg@1&2" "x|y"',
     "buildCmdLine quotes cmd metacharacters");
   assert(buildCmdLine(["a", "b c", "d"]) === 'a "b c" d', "buildCmdLine quotes only as needed");

@@ -151,12 +151,13 @@ export function createDetectionCache({ ttlMs = DETECTION_CACHE_TTL_MS, now = () 
   };
 }
 
-/** Quote a single shell arg (cmd.exe / POSIX) — only when it actually needs it. */
+/** Quote a single shell arg for cmd.exe — quote when needed and escape %-expansion. */
 export function quoteArg(a) {
-  const s = String(a);
-  // cmd.exe metacharacters (& | < > ^ ( ) %) would break or hijack the command
+  // Quoting does NOT stop cmd.exe %VAR% expansion, so escape % → %% first.
+  const s = String(a).replace(/%/g, "%%");
+  // cmd.exe metacharacters (& | < > ^ ( )) would break or hijack the command
   // line built for `cmd.exe /c`, so any of them triggers quoting too.
-  return /[\s"&|<>^()%]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+  return /[\s"&|<>^()]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
 }
 
 export function buildCmdLine(args) {
