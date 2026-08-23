@@ -54,3 +54,14 @@ export function h2cFile(oldName, newName) {
   }
   return newPath;
 }
+
+/**
+ * PID file for a given port — ~/.h2c/pid.<port>.
+ * `h2c enable` writes its own PID here; `h2c disable` reads it to kill the
+ * daemon holding that port. Per-port because each working directory derives
+ * its own deterministic port.
+ */
+export function pidFilePath(port) {
+  ensureH2cDir();
+  return join(H2C_DIR, `pid.${port}`);
+}

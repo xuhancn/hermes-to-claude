@@ -69,6 +69,14 @@ npm install && npm run build
 /h2c status
 ```
 
+随时停止 bridge：
+
+```
+/h2c disable
+```
+
+`disable` 会读取守护进程的 PID（启用时记录在 `~/.h2c/pid.<port>`），并杀掉后台进程、释放端口。不再残留孤儿进程。
+
 ### 孤儿进程自动退出
 
 h2c 作为 Claude Code 内部启动的后台进程运行。Claude Code 退出后，若不加处理 h2c 会残留为孤儿进程占用端口。为避免这种情况，h2c 监测自己的 stdin：当启动它的 Claude Code 退出时，管道关闭，h2c 自动退出并释放端口。
@@ -106,6 +114,7 @@ h2c 通过 `npx @anthropic-ai/claude-code` 为每个任务启动 Claude Code。�
 | 变量 | 含义 |
 |----------|---------|
 | `H2C_CLAUDE_VERSION` | 固定特定 Claude Code 版本（`npx @anthropic-ai/claude-code@<version>`）。设置后 h2c 永不回退到其它版本 — 固定版本损坏会给出明确错误。 |
+| `H2C_CLAUDE_NO_SELF_HEAL` | 设为 `1` 彻底关闭检测/自愈/回退整条链路。用于 Claude Code 无法（重新）安装的地区（例如 npm registry 被墙）——否则这条链路会在每次 spawn 时陷入"重装 → 失败 → 重装"的死循环。设置后直接走 `npx`，二进制损坏就快速失败而不是循环重装。 |
 | `H2C_CACHE_DIR` | 覆盖回退安装目录（默认 `~/.cache/hermes-to-claude/claude-code`）。 |
 
 ### 认证与端口
