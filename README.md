@@ -68,6 +68,14 @@ This starts the HTTP server. The port is derived from the working directory (see
 /h2c status
 ```
 
+Stop the bridge at any time:
+
+```
+/h2c disable
+```
+
+`disable` reads the daemon's PID (recorded under `~/.h2c/pid.<port>` when it was enabled) and kills the background process, releasing the port. No orphan left behind.
+
 ### Orphan Auto-Exit
 
 h2c runs as a background process launched from inside Claude Code. When Claude Code exits, h2c would otherwise be left as an orphan holding the port. To prevent this, h2c watches its own stdin — when the launching Claude Code exits, the pipe closes and h2c shuts itself down, releasing the port.
@@ -105,6 +113,7 @@ Optional environment variables:
 | Variable | Meaning |
 |----------|---------|
 | `H2C_CLAUDE_VERSION` | Pin a specific Claude Code version (`npx @anthropic-ai/claude-code@<version>`). When set, h2c never falls back to another version — a broken pin surfaces a clear error. |
+| `H2C_CLAUDE_NO_SELF_HEAL` | Set to `1` to disable the detection/self-heal/fallback pipeline entirely. Use in regions where Claude Code cannot be (re)installed (e.g. a blocked npm registry) — otherwise the pipeline loops "reinstall → fail → reinstall" on every spawn. With this set, spawn goes straight to `npx` and a broken binary fails fast instead of looping. |
 | `H2C_CACHE_DIR` | Override the fallback install dir (default `~/.cache/hermes-to-claude/claude-code`). |
 
 ### Authentication and Port

@@ -2,7 +2,9 @@
 import { createServer, startStatusBar, stopStatusBar } from "./server.mjs";
 import { markRunning, markStopped, readState } from "./state.mjs";
 import { networkInterfaces } from "os";
+import { readFileSync, writeFileSync } from "fs";
 import { isHome, homePort, homeKey } from "./home.mjs";
+import { pidFilePath } from "./paths.mjs";
 import { startOrphanWatchdog } from "./orphan_watchdog.mjs";
 import { logEvent } from "./log.mjs";
 
@@ -42,6 +44,13 @@ async function cmd_enable() {
   server.listen(port, isHome() ? "127.0.0.1" : undefined);
   markRunning(port);
 
+  // Record our PID so `h2c disable` can find and kill this daemon.
+  try {
+    writeFileSync(pidFilePath(port), String(process.pid), "utf8");
+  } catch {
+    // best-effort — disable will just find nothing to kill
+  }
+
   logEvent("startup", { cwd, port, version: H2C_VERSION, pid: process.pid });
 
   statusBarInterval = startStatusBar(port);
@@ -76,22 +85,26 @@ function shutdownForOrphan(reason) {
 }
 
 function cmd_disable() {
-  if (watchdog) watchdog.stop();
-  if (server) {
-    server.close(() => {
-      server = null;
-      markStopped();
-      console.log("  h2c: off");
-      stopStatusBar(statusBarInterval);
-      process.exit(0);
-    });
-    // Fallback: if close hangs, force exit after 1s
-    setTimeout(() => process.exit(0), 1000);
-  } else {
-    markStopped();
-    console.log("  h2c: off");
-    process.exit(0);
+  const port = homePort(process.cwd());
+  let pid = null;
+  try {
+    pid = parseInt(readFileSync(pidFilePath(port), "utf8").trim(), 10);
+  } catch {
+    // no pid file — nothing to kill
   }
+  if (pid && Number.isInteger(pid) && pid !== process.pid) {
+    try {
+      process.kill(pid);
+      console.log(`  h2c: off (killed ${pid})`);
+    } catch (err) {
+      // ESRCH = the daemon already exited on its own — treat as success.
+      console.log(err.code === "ESRCH" ? "  h2c: off" : `  h2c: off (kill ${pid} failed: ${err.message})`);
+    }
+  } else {
+    console.log("  h2c: off");
+  }
+  markStopped();
+  process.exit(0);
 }
 
 function cmd_status() {

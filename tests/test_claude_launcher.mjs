@@ -407,6 +407,24 @@ async function main() {
     assert(io.calls.npmView === 0, "JS-entry healthy → no version fallback enumeration");
   }
 
+  // ── ⑪ H2C_CLAUDE_NO_SELF_HEAL=1 → skip detection/self-heal/fallback ──
+  console.log("-- ⑪ H2C_CLAUDE_NO_SELF_HEAL=1 → skip self-heal/fallback --");
+  {
+    const io = makeFakeIO();
+    io.setFile(binPath(npxPkgDir()), STUB); // broken placeholder in the npx cache
+    const spec = await ensureClaudeBinary({
+      env: { H2C_CLAUDE_NO_SELF_HEAL: "1" },
+      io,
+      cache: createDetectionCache(),
+      mutex: createMutex(),
+    });
+    assert(spec.type === "npx" && spec.pkgArg === "@anthropic-ai/claude-code",
+      "NO_SELF_HEAL → unpinned npx spec (spawn directly, no heal)");
+    assert(io.calls.runInstall === 0, "NO_SELF_HEAL → no install.cjs run");
+    assert(io.calls.npmView === 0, "NO_SELF_HEAL → no npm view");
+    assert(io.calls.installVersion.length === 0, "NO_SELF_HEAL → no fallback installs");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 }

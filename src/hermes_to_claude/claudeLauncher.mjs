@@ -50,6 +50,12 @@ export const LOCK_RECHECK_MS = 6 * 60 * 60 * 1000;
 export const INSTALL_TIMEOUT_MS = 300_000;
 
 export const VERSION_PIN_ENV = "H2C_CLAUDE_VERSION";
+// Set to "1" to disable the detection/self-heal/fallback pipeline entirely.
+// For regions where Claude Code cannot be (re)installed (e.g. GFW-blocked npm
+// registry), the pipeline would otherwise loop "reinstall → fail → reinstall"
+// on every spawn. With this set, spawn goes straight to npx and a broken
+// binary fails fast instead of looping.
+export const NO_SELF_HEAL_ENV = "H2C_CLAUDE_NO_SELF_HEAL";
 const PKG_NAME = "@anthropic-ai/claude-code";
 const BIN_NAMES = ["claude.exe", "claude"];
 
@@ -313,6 +319,14 @@ function cacheHit(cache, pinned) {
 
 async function resolveClaudeSpec({ io, env, pinned, lockRecheckMs }) {
   if (pinned) return resolvePinned({ io, env, pinned });
+
+  // H2C_CLAUDE_NO_SELF_HEAL=1 — skip the whole detection/self-heal/fallback
+  // pipeline. Spawn npx directly; a broken binary then fails fast (exit code)
+  // instead of looping "reinstall → fail" on every spawn.
+  if (env[NO_SELF_HEAL_ENV] === "1") {
+    io.log(`${NO_SELF_HEAL_ENV}=1 — skipping self-heal/fallback`);
+    return { type: "npx", pkgArg: PKG_NAME };
+  }
 
   // Step 1: locate the newest cached package in the npx cache.
   const pkgDir = await findLatestNpxPkgDir(io);
